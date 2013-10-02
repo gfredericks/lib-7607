@@ -21,6 +21,10 @@
       (when (> (now) timeout)
         (pause a)
         (throw (ex-info "Timed out during test!" {:searcher a})))
+      (when-let [data (-> @a :crashed-threads rand-nth)]
+        (pause a)
+        (throw (ex-info (str "Search thread crashed! " (str (:throwable data)))
+                        {:info data})))
       (Thread/sleep 100))
     (-> @a :search-manager results)))
 

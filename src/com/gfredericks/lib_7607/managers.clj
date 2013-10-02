@@ -29,13 +29,19 @@
 
 (defn job
   [m]
-  (when-not (done? m) (-job m)))
+  (when-not (done? m)
+    (if-let [[job m'] (-job m)]
+      (let [id (or (:id job) (UUID/randomUUID))
+            job (assoc job :id id)]
+        [job (update m' :jobs assoc id job)]))))
 
 (defn report
   [m job-id result]
-  (cond-> m
-          (not (done? m))
-          (-report job-id result)))
+  {:pre [(contains? (:jobs m) job-id)]}
+  (-> m
+      (update :jobs dissoc job-id)
+      (cond-> (not (done? m))
+              (-report job-id result))))
 
 
 (defprotocol IJob ;; do we really?
@@ -103,9 +109,8 @@
 
 (defn make-simple-job
   [sm input func]
-  (let [job-id (UUID/randomUUID)
-        job (SimpleJob. job-id input func)]
-    [job (update sm :jobs (fnil conj #{}) job-id)]))
+  (let [job (SimpleJob. nil input func)]
+    [job sm]))
 
 (derive ::lazy-seq ::search-manager)
 
@@ -122,9 +127,7 @@
 
 (defmethod -report ::lazy-seq
   [me job-id result]
-  (-> me
-      (update :jobs disj job-id)
-      (update :results add-result result)))
+  (update me :results add-result result))
 
 (defmethod results ::lazy-seq [me] (:results me))
 
@@ -145,10 +148,9 @@
 
 (defmethod -report ::lazy-seq-first-result
   [{:keys [results] :as me} job-id result]
-  (-> me
-      (update :jobs disj job-id)
-      (cond-> (and (nil? results) result)
-              (assoc :results result))))
+  (cond-> me
+          (and (nil? results) result)
+          (assoc :results result)))
 
 (defn lazy-seq-first-result-manager
   "A SearchManager that maps over a lazy seq and short-circuits with the first
@@ -168,15 +170,18 @@
       [job (assoc me :sm sm')])))
 (defmethod -report ::iterator
   [{:keys [sm func], :as me} job-id result]
-  (let [sm' (report sm job-id result)]
-    (if (done? sm')
-      (let [sm-or-result (func (results sm'))]
-        (if (search-manager? sm-or-result)
-          (assoc me :sm sm-or-result)
-          (-> me
-              (dissoc :sm)
-              (assoc :results sm-or-result))))
-      (assoc me :sm sm'))))
+  (if (contains? (:jobs sm) job-id)
+    (let [sm' (report sm job-id result)]
+      (if (done? sm')
+        (let [sm-or-result (func (results sm'))]
+          (if (search-manager? sm-or-result)
+            (assoc me :sm sm-or-result)
+            (-> me
+                (dissoc :sm)
+                (assoc :results sm-or-result))))
+        (assoc me :sm sm')))
+    ;; in this case it is presumably from an older inner search-manager
+    me))
 (defmethod results ::iterator
   [me]
   (if (done? me)
@@ -205,9 +210,7 @@
 
 (defmethod -report ::map-quick-reducing
   [{:keys [reduce] :as me} job-id result]
-  (-> me
-      (update :jobs disj job-id)
-      (update :x reduce result)))
+  (update me :x reduce result))
 
 (defn map-quick-reducing-search-manager
   "Assumes the map function is costly and the reduce function is quick."
