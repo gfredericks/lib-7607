@@ -160,28 +160,54 @@
                   :coll coll
                   :func func))
 
-(defmethod done? ::iterator
+;;
+;; A ::delegator is a search-manager all of whose jobs come from a
+;; nested search-manager. The main thing that distinguishes delegators
+;; is what they do when the nested search-manager is done.
+;;
+;; Delegators are expected to define a method for finished-delegatee
+;;
+
+(defmulti finished-delegatee
+  "Docstring."
+  first-arg-type)
+
+(defmethod done? ::delegator
   [me]
-  (not (contains? me :sm)))
-(defmethod -job ::iterator
-  [{sm :sm, :as me}]
+  (not (contains? me :nested-search-manager)))
+
+(defmethod -job ::delegator
+  [{sm :nested-search-manager, :as me}]
   (when-not (done? me)
     (if-let [[job sm'] (job sm)]
-      [job (assoc me :sm sm')])))
-(defmethod -report ::iterator
-  [{:keys [sm func], :as me} job-id result]
-  (if (contains? (:jobs sm) job-id)
-    (let [sm' (report sm job-id result)]
-      (if (done? sm')
-        (let [sm-or-result (func (results sm'))]
-          (if (search-manager? sm-or-result)
-            (assoc me :sm sm-or-result)
-            (-> me
-                (dissoc :sm)
-                (assoc :results sm-or-result))))
-        (assoc me :sm sm')))
-    ;; in this case it is presumably from an older inner search-manager
+      [job (assoc me :nested-search-manager sm')])))
+
+(defmethod -report ::delegator
+  [{:keys [nested-search-manager] :as me} job-id result]
+  (if (contains? (:jobs nested-search-manager) job-id)
+    (let [sm (report nested-search-manager job-id result)]
+      (if (done? sm)
+        (finished-delegatee me sm)
+        (assoc me :nested-search-manager sm)))
+    ;; in this case it is presumably from an older :nested-search-manager
     me))
+
+;;
+;; ::iterator
+;;
+
+
+(derives ::iterator ::search-manager ::delegator)
+
+(defmethod finished-delegatee ::iterator
+  [{:keys [func] :as me} sm]
+  (let [sm-or-result (func (results sm))]
+    (if (search-manager? sm-or-result)
+      (assoc me :nested-search-manager sm-or-result)
+      (-> me
+          (dissoc :nested-search-manager)
+          (assoc :results sm-or-result)))))
+
 (defmethod results ::iterator
   [me]
   (if (done? me)
@@ -190,7 +216,7 @@
 (defn iterator-search-manager
   [sm func]
   (search-manager ::iterator
-                  :sm sm
+                  :nested-search-manager sm
                   :func func))
 
 (derive ::map-quick-reducing ::search-manager)
