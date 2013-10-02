@@ -201,7 +201,7 @@
 
 (defmethod finished-delegatee ::iterator
   [{:keys [func] :as me} sm]
-  (let [sm-or-result (func (results sm))]
+  (let [sm-or-result (func sm)]
     (if (search-manager? sm-or-result)
       (assoc me :nested-search-manager sm-or-result)
       (-> me

@@ -73,12 +73,13 @@
             (lazy-seq-first-result-manager
              primes
              #(when (zero? (rem n %)) [(/ n %) [%]]))
-            (fn [[n ds]]
-              (if (= 1 n)
-                ds
-                (lazy-seq-first-result-manager
-                 primes
-                 #(when (zero? (rem n %)) [(/ n %) (conj ds %)])))))]
+            (fn [sm]
+              (let [[n ds] (results sm)]
+                (if (= 1 n)
+                  ds
+                  (lazy-seq-first-result-manager
+                   primes
+                   #(when (zero? (rem n %)) [(/ n %) (conj ds %)]))))))]
     (is (= [3 3 13]
            (-> sm run-search sort)))))
 
