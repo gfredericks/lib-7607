@@ -40,6 +40,7 @@
   {:pre [(contains? (:jobs m) job-id)]}
   (-> m
       (update :jobs dissoc job-id)
+      (update :report-count inc)
       (cond-> (not (done? m))
               (-report job-id result))))
 
@@ -60,7 +61,9 @@
 
 (defn ^:private search-manager
   [type & kvs]
-  (assoc (apply hash-map kvs) :type type))
+  (assoc (apply hash-map kvs)
+    :type type
+    :report-count 0))
 
 (defn search-manager?
   [x]

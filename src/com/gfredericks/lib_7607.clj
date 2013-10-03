@@ -147,6 +147,7 @@
 (defn info
   [{:keys [search-manager crashed-threads total domain threads results] :as m}]
   (cond-> {:running-threads (count threads)
+           :jobs-finished (:report-count search-manager)
            :done? (done? search-manager)}
           (seq crashed-threads)
           (assoc :crashed-thread-count (count crashed-threads))))
