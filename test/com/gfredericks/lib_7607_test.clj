@@ -84,38 +84,18 @@
            (-> sm run-search sort)))))
 
 
-;;
-;; Having a hard time seeing how to not couple the
-;; hill-climbing-search-manager with the reporter, since the hill
-;; climbing algorithm kind of incorporates a score that the reporter
-;; would also want to pay attention to. I guess we could just have the
-;; general convention that when scores exist they do so as [data
-;; score] tuples. Dunno. That ordering doesn't fit naturally with
-;; sorted-sets though. Grr...
-;;
-
-#_(deftest hill-climbing-sort-test
-  (let [sm (hill-climbing-search-manager
-            ;; random instance generator
-            (fn [] (shuffle (range 20)))
-            ;; option generator
-            (fn [coll]
-              (for [x (-> coll count dec range)]
-                #(-> %
-                     (assoc x (get % (inc x)))
-                     (assoc (inc x) (get % x)))))
-            ;; evaluator
-            (fn [coll]
-              (->> coll
-                   (partition 2 1)
-                   (filter (fn [[a b]] (< a b)))
-                   (count)))
-            ;; result holder
-            (best-result-holder))
-        a (searcher sm {})]
-    (Thread/sleep 5000)
-    (is (-> @a
-            :search-manager
-            :result-holder
-            first
-            (= (range 20))))))
+;; Problem: this algorithm doesn't actually succeed
+(deftest hill-climbing-sort-test
+  (let [f' (fn [z] (inc (- (* (dec z) (dec z)))))
+        f (fn [x y] (+ (f' x) (f' y)))
+        e 1/1000
+        sm (hill-climbing-search-manager
+            [(/ (rand-int 2000) 1000)
+             (/ (rand-int 2000) 1000)]
+            (fn [[x y]]
+              [[(+ x e) y] [(- x e) y] [x (+ y e)] [x (- y e)]])
+            (fn [[x y]] (f x y)))]
+    (is (= [1 1]
+           (-> sm
+               run-search
+               first)))))

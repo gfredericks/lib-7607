@@ -50,13 +50,13 @@
   ;; or just invoke from IFn??
   (run [_]))
 
-(defprotocol IResultTracker
-  (add-result [_ x] "Submits a result to maybe be added to the collection."))
+(defmulti add-result
+  "Multimethod to add a result to a collection."
+  (fn [coll res] (type coll)))
 
-(extend-protocol IResultTracker
-  clojure.lang.IPersistentCollection
-  (add-result [me x] (conj me x)))
-
+(defmethod add-result clojure.lang.IPersistentCollection
+  [coll x]
+  (conj coll x))
 
 (defn ^:private search-manager
   [type & kvs]
@@ -247,55 +247,40 @@
                   :x x
                   :coll coll))
 
-(comment
-  (defrecord HillClimbingSearchManager [generator edges edge-taker scorer result-holder]
-    ISearchManager
-    ;; Man alive this feels messy...
-    ;;
-    ;; How is this not mixed up in the result holder?
-    (job [me]
-      (if-let [[e & es] (-> me :current-edges seq)]
-        (let [new-job-id (UUID/randomUUID)]
-          [(SimpleJob. new-job-id e (fn []
-                                      (let [neighbor (-> me
-                                                         (:current)
-                                                         (edge-taker e))]
-                                        [(scorer neighbor) neighbor])))
-           (-> me
-               (assoc :current-edges es)
-               (update :current-jobs conj new-job-id))])
-        (if (empty? (:current-jobs me))
-          (let [current (generator)
-                current-edges (edges current)]
-            (-> me
-                (assoc :current current,
-                       :current-score (scorer current)
-                       :current-edges current-edges,
-                       :best-result nil
-                       :current-jobs #{})
-                (job)))
-          (throw (ex-info "I don't know how to do this yet" {:me me})))))
-    ;; Don't we want to wait till all the results get back and then
-    ;; pick the best one?
-    (report [me job-id result]
-      (let [[score neighbor] result
-            [score' neighbor'] (:best-result me)]
-        (cond-> me
-                (or (nil? score') (> score score'))
-                (assoc :best-result result)
+;;
+;; ::hill-climbing
+;;
 
-                (= #{job-id} (:current-jobs me))
-                ;; this is where we figure out whether to generate a new
-                ;; instance or not.
-                ;;
-                ;; Could we code this to do just one instance and have a
-                ;; higher-order search-manager that does repetition?
-                ;;
-                ;; On that note, could THIS search-manager be an HOSM
-                ;; based on the single step??????????!!
-                ))
-      ))
+(defmethod add-result ::best-result-keeper
+  [coll x]
+  (if (empty? coll)
+    (conj coll x)
+    (let [[[data score]] coll
+          [data' score'] x]
+      (if (neg? (compare score score'))
+        (assoc coll 0 x)
+        coll))))
 
-  (defn hill-climbing-search-manager
-    [generator neighbors scorer result-holder]
-    (HillClimbingSearchManager. generator neighbors scorer result-holder)))
+;; TODO: Serializability!
+(def best-result-keeper
+  (with-meta
+    []
+    {:type ::best-result-keeper}))
+
+(defn hill-climbing-search-manager
+  [start neighbors scorer]
+  (letfn [(make-lazy-sm [[data score :as x]]
+            (assoc
+                (lazy-seq-search-manager
+                 (neighbors data)
+                 (juxt identity scorer)
+                 best-result-keeper)
+              :x x))]
+    (iterator-search-manager
+     (make-lazy-sm [start (scorer start)])
+     (fn [nested]
+       (let [[data score] (:x nested)
+             [[data' score']] (results nested)]
+         (if (> score' score)
+           (make-lazy-sm [data' score'])
+           [data score]))))))
