@@ -94,6 +94,8 @@
      me]))
 
 ;; TODO: better docstring?
+;;       checker is a bad name since the result is actually whatever
+;;       the checker returns.
 (defn random-guess-search-manager
   "Creates a search manager that repeatedly generates random instances
    until it finds one that satisfies. Generator should be a function
