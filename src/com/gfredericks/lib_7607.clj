@@ -121,9 +121,9 @@
 
 (defn add-thread
   [state]
-  (let [t (doto (Thread. (bound-fn [] (worker state)))
-            (.start))]
-    (swap! state #(update % :threads assoc t true))))
+  (let [t (Thread. (bound-fn [] (worker state)))]
+    (swap! state #(update % :threads assoc t true))
+    (.start t)))
 
 (defn resume
   [state]
