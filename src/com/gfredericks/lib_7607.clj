@@ -1,6 +1,7 @@
 (ns com.gfredericks.lib-7607
   "Trying to write nice generic search controllers."
-  (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]]))
+  (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]
+             :as man]))
 
 (defn ^:private update [m k f & args] (apply update-in m [k] f args))
 
@@ -139,18 +140,24 @@
         state (atom {:thread-count thread-count
                      :threads {}
                      :thread-jobs {}
+                     :show-results? true
                      :search-manager search-manager})]
     (alter-meta! state assoc :type ::search-state)
     (resume state)
     state))
 
 (defn info
-  [{:keys [search-manager crashed-threads total domain threads results] :as m}]
+  [{:keys [search-manager crashed-threads total domain threads
+           show-results?]}]
   (cond-> {:running-threads (count threads)
            :jobs-finished (:report-count search-manager)
            :done? (done? search-manager)}
+
           (seq crashed-threads)
-          (assoc :crashed-thread-count (count crashed-threads))))
+          (assoc :crashed-thread-count (count crashed-threads))
+
+          show-results?
+          (assoc :results (man/results search-manager))))
 
 (defn pause
   [state]
