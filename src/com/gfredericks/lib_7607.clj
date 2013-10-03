@@ -104,13 +104,13 @@
 
 (defn worker
   [state-atom]
-  (while (should-work? @state-atom)
-    (try
+  (try
+    (while (should-work? @state-atom)
       (when-let [job (get-job state-atom)]
-        (do-job state-atom job))
-      (catch Throwable t
-        (crash state-atom t)
-        (throw t))))
+        (do-job state-atom job)))
+    (catch Throwable t
+      (crash state-atom t)
+      (throw t)))
   ;; pausing or done
   (swap! state-atom update :threads dissoc (me)))
 
