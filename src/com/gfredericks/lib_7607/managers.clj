@@ -136,7 +136,12 @@
 
 (defmethod results ::lazy-seq [me] (:results me))
 
+;; TODO: should we drop nil results??
 (defn lazy-seq-search-manager
+  "A search manager that creates a job for every item in the given
+   collection, where the job consists of calling the given function.
+   The return value of the function will be added to the
+   result-holder, which defaults to a vector."
   ([coll func]
      (lazy-seq-search-manager coll func []))
   ([coll func result-holder]
