@@ -179,7 +179,10 @@
           (assoc :crashed-thread-count (count crashed-threads))
 
           show-results?
-          (assoc :results (man/results search-manager))))
+          (assoc :results (man/results search-manager))
+
+          extra-info
+          (merge (extra-info m))))
 
 (defn pause
   [state]
