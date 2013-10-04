@@ -208,4 +208,5 @@
                      (assoc m :threads
                             (reduce #(assoc %1 %2 false)
                                     (:threads m)
-                                    threads-to-kill))))))))
+                                    threads-to-kill)))))))
+  :ok)
