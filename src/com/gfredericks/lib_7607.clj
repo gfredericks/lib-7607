@@ -50,6 +50,20 @@
   {:thread-count 4
    :result-size 10})
 
+(defn update-job-frequency
+  ([m] (update-job-frequency m (System/currentTimeMillis)))
+  ([m now]
+     (let [{:keys [last-job rolling-avg]
+            :or {last-job (- now 5000)
+                 rolling-avg 5.0}}
+           m
+
+           avg-factor 0.999
+           time-since (- now last-job)
+           new-avg (+ (* avg-factor rolling-avg)
+                      (* (- 1 avg-factor) (/ time-since 1000.0)))]
+       (assoc m :last-job now :rolling-avg new-avg))))
+
 ;;
 ;; Start worker code
 ;;
@@ -95,6 +109,7 @@
     (swap! state-atom
            (fn [state]
              (-> state
+                 (update :performance update-job-frequency)
                  (update :search-manager report (id job) x)
                  (update :thread-jobs dissoc (me)))))))
 
@@ -148,10 +163,17 @@
 
 (defn info
   [{:keys [search-manager crashed-threads total domain threads
-           show-results?]}]
+           show-results? extra-info]
+    {avg-between :rolling-avg} :performance
+    :as m}]
   (cond-> {:running-threads (count threads)
            :jobs-finished (:report-count search-manager)
            :done? (done? search-manager)}
+
+          avg-between
+          (assoc :frequency
+            ;; poor man's rounding?
+            (-> avg-between / (->> (format "%.2f")) (read-string)))
 
           (seq crashed-threads)
           (assoc :crashed-thread-count (count crashed-threads))
