@@ -57,6 +57,8 @@
                  rolling-avg 5.0}}
            m
 
+           ;; This could be improved to start out volatile and then
+           ;; settle down.
            avg-factor 0.999
            time-since (- now last-job)
            new-avg (+ (* avg-factor rolling-avg)
