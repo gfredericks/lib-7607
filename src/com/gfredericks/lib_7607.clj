@@ -1,9 +1,8 @@
 (ns com.gfredericks.lib-7607
   "Trying to write nice generic search controllers."
   (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]
-             :as man]))
-
-(defn ^:private update [m k f & args] (apply update-in m [k] f args))
+             :as man]
+            [com.gfredericks.lib-7607.util :refer [update]]))
 
 ;; Okay so here's my new plan.
 ;;   1) Finish the prime factoring tests and get them to pass

@@ -1,31 +1,26 @@
 (ns com.gfredericks.lib-7607.managers
+  (:require [com.gfredericks.lib-7607.results :refer [add-result]]
+            [com.gfredericks.lib-7607.util
+             :refer [update derives type-kw-of-first-arg]])
   (:import java.util.UUID))
 
 ;;
 ;; ## Prelude
 ;;
 
-(defn ^:private update [m k f & args] (apply update-in m [k] f args))
-(defn derives
-  "Derive a type from several parents at once (in the global hierarchy)."
-  [tag & parents]
-  (doseq [parent parents] (derive tag parent)))
-
-(defn first-arg-type [x & more] (:type x))
-
 (defmulti -job
   "Returns a [job new-search-manager] if there is a job available."
-  first-arg-type)
+  type-kw-of-first-arg)
 
 (defmulti -report
   "Returns a [job new-search-manager]"
-  first-arg-type)
+  type-kw-of-first-arg)
 
 (defmulti done?
-  first-arg-type)
+  type-kw-of-first-arg)
 
 (defmulti results
-  first-arg-type)
+  type-kw-of-first-arg)
 
 (defn job
   [m]
@@ -50,10 +45,6 @@
   (id [_] "Returns a UUID")
   ;; or just invoke from IFn??
   (run [_]))
-
-(defmulti add-result
-  "Multimethod to add a result to a collection."
-  (fn [coll res] (type coll)))
 
 (defmethod add-result clojure.lang.IPersistentCollection
   [coll x]
@@ -144,7 +135,7 @@
 
 (defmulti finished-delegatee
   "Docstring."
-  first-arg-type)
+  type-kw-of-first-arg)
 
 (defmethod done? ::delegator
   [me]
