@@ -71,42 +71,6 @@
        (isa? (:type x) ::search-manager)))
 
 
-
-(defrecord RandomGuessJob [id data checker]
-  IJob
-  (id [_] id)
-  (run [_] (checker data)))
-
-(defmethod results ::first-result-quitter [m] (:result m))
-(defmethod done? ::first-result-quitter [m] (contains? m :result))
-(defmethod -report ::first-result-quitter
-  [m job-id result]
-  (cond-> m
-          (and result (not (done? m)))
-          (assoc :result result)))
-
-(derives ::random-guess ::search-manager ::first-result-quitter)
-
-(defmethod -job ::random-guess
-  [{:keys [generator checker] :as me}]
-  (when-not (done? me)
-    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
-     me]))
-
-;; TODO: better docstring?
-;;       checker is a bad name since the result is actually whatever
-;;       the checker returns.
-(defn random-guess-search-manager
-  "Creates a search manager that repeatedly generates random instances
-   until it finds one that satisfies. Generator should be a function
-   that generates random instances of the problem (quickly), and
-   checker should be the workhorse that returns non-nil if it's found
-   something. Quits as soon as if finds a single result."
-  [generator checker]
-  (search-manager ::random-guess
-                  :generator generator
-                  :checker checker))
-
 (defrecord SimpleJob [id x func]
   IJob
   (id [_] id)
@@ -294,3 +258,63 @@
          (if (> score' score)
            (make-lazy-sm [data' score'])
            [data score]))))))
+
+
+;;
+;; Randomness
+;;
+
+(defrecord RandomGuessJob [id data checker]
+  IJob
+  (id [_] id)
+  (run [_] (checker data)))
+
+(defmethod results ::first-result-quitter [m] (:result m))
+(defmethod done? ::first-result-quitter [m] (contains? m :result))
+(defmethod -report ::first-result-quitter
+  [m job-id result]
+  (cond-> m
+          (and result (not (done? m)))
+          (assoc :result result)))
+
+(derives ::random-guess ::search-manager ::first-result-quitter)
+
+(defmethod -job ::random-guess
+  [{:keys [generator checker] :as me}]
+  (when-not (done? me)
+    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
+     me]))
+
+;; TODO: better docstring?
+;;       checker is a bad name since the result is actually whatever
+;;       the checker returns.
+(defn random-guess-search-manager
+  "Creates a search manager that repeatedly generates random instances
+   until it finds one that satisfies. Generator should be a function
+   that generates random instances of the problem (quickly), and
+   checker should be the workhorse that returns non-nil if it's found
+   something. Quits as soon as if finds a single result."
+  [generator checker]
+  (search-manager ::random-guess
+                  :generator generator
+                  :checker checker))
+
+
+(derives ::repeatedly ::search-manager ::delegator)
+(defmethod results ::repeatedly [m] (:results m))
+(defmethod done? ::repeatedly [_] false)
+(defmethod finished-delegatee ::repeatedly
+  [me inner-sm]
+  (-> me
+      (update :results add-result (results inner-sm))
+      (assoc :nested-search-manager ((:generator me)))))
+
+(defn repeatedly-search-manager
+  "generator is a function that returns a search-manager. Results is
+   a container that will be passed the final `results` of each run of
+   the inner search manager."
+  [generator results]
+  (search-manager ::repeatedly
+                  :generator generator
+                  :nested-search-manager (generator)
+                  :results results))

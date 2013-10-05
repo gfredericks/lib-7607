@@ -99,3 +99,20 @@
            (-> sm
                run-search
                first)))))
+
+(deftest repeatedly-test
+  (let [fsm (fn []
+              (random-guess-search-manager
+               #(rand-int 100)
+               #(if (-> % str reverse (= [\7 \4]))
+                  %)))
+        sm (repeatedly-search-manager
+            fsm
+            [])
+        s (searcher sm {})]
+    (Thread/sleep 250)
+    (pause s)
+    (let [results (-> @s :search-manager results)]
+      (is (vector? results))
+      (is (> 50 (count results)))
+      (is (= #{47} (set results))))))
