@@ -1,5 +1,5 @@
 (ns com.gfredericks.lib-7607.managers
-  (:require [com.gfredericks.lib-7607.results :refer [add-result]]
+  (:require [com.gfredericks.lib-7607.results :refer [add-result best-result-keeper]]
             [com.gfredericks.lib-7607.util
              :refer [update derives type-kw-of-first-arg]])
   (:import java.util.UUID))
@@ -45,10 +45,6 @@
   (id [_] "Returns a UUID")
   ;; or just invoke from IFn??
   (run [_]))
-
-(defmethod add-result clojure.lang.IPersistentCollection
-  [coll x]
-  (conj coll x))
 
 (defn ^:private search-manager
   [type & kvs]
@@ -216,21 +212,6 @@
 ;; ::hill-climbing
 ;;
 
-(defmethod add-result ::best-result-keeper
-  [coll x]
-  (if (empty? coll)
-    (conj coll x)
-    (let [[[data score]] coll
-          [data' score'] x]
-      (if (neg? (compare score score'))
-        (assoc coll 0 x)
-        coll))))
-
-;; TODO: Serializability!
-(def best-result-keeper
-  (with-meta
-    []
-    {:type ::best-result-keeper}))
 
 (defn hill-climbing-search-manager
   [start neighbors scorer]
