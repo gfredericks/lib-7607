@@ -279,6 +279,7 @@
   [me inner-sm]
   (-> me
       (update :results add-result (results inner-sm))
+      (update :searches-finished inc)
       (assoc :nested-search-manager ((:generator me)))))
 
 (defn repeatedly-search-manager
@@ -289,4 +290,5 @@
   (search-manager ::repeatedly
                   :generator generator
                   :nested-search-manager (generator)
+                  :searches-finished 0
                   :results results))
