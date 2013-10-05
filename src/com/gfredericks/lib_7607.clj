@@ -143,9 +143,9 @@
 
 (defn resume
   [state]
-  (letfn [(low? [{:keys [thread-count threads]}]
-            (< (count threads) thread-count))]
-    (while (low? @state)
+  (let [{:keys [thread-count threads]} @state
+        threads-needed (- thread-count (count threads))]
+    (dotimes [_ threads-needed]
       (add-thread state))))
 
 (defn searcher
