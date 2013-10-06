@@ -2,6 +2,7 @@
   "Utilities for creatively serialized things.")
 
 (deftype MetadSeq [m ^clojure.lang.ISeq s]
+  clojure.lang.Sequential
   clojure.lang.IMeta
   (meta [_] m)
   clojure.lang.ISeq
