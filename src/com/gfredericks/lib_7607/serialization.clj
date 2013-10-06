@@ -1,4 +1,4 @@
-(ns com.gfredericks.lib-7067.serialization
+(ns com.gfredericks.lib-7607.serialization
   "Utilities for creatively serialized things.")
 
 (deftype MetadSeq [m ^clojure.lang.ISeq s]
