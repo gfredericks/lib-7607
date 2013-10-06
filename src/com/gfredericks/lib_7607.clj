@@ -167,23 +167,27 @@
            show-results? extra-info]
     {avg-between :rolling-avg} :performance
     :as m}]
-  (cond-> {:running-threads (count threads)
-           :jobs-finished (:report-count search-manager)
-           :done? (done? search-manager)}
+  (let [zombies (->> threads keys (remove (memfn isAlive)))]
+    (cond-> {:running-threads (count threads)
+             :jobs-finished (:report-count search-manager)
+             :done? (done? search-manager)}
 
-          avg-between
-          (assoc :frequency
-            ;; poor man's rounding?
-            (-> avg-between / (->> (format "%.2f")) (read-string)))
+            avg-between
+            (assoc :frequency
+              ;; poor man's rounding?
+              (-> avg-between / (->> (format "%.2f")) (read-string)))
 
-          (seq crashed-threads)
-          (assoc :crashed-thread-count (count crashed-threads))
+            (seq crashed-threads)
+            (assoc :crashed-thread-count (count crashed-threads))
 
-          show-results?
-          (assoc :results (man/results search-manager))
+            show-results?
+            (assoc :results (man/results search-manager))
 
-          extra-info
-          (merge (extra-info m))))
+            extra-info
+            (merge (extra-info m))
+
+            (seq zombies)
+            (assoc :zombie-threads (count zombies)))))
 
 (defn pause
   [state]
