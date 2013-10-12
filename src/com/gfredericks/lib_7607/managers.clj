@@ -225,7 +225,7 @@
   (assoc
       (lazy-seq-search-manager
        (neighbors data)
-       (cereal/juxt cereal/identity scorer)
+       (cereal/juxt #'identity scorer)
        best-result-keeper)
     :x x))
 
