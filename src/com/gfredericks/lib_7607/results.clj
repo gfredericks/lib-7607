@@ -1,7 +1,18 @@
 (ns com.gfredericks.lib-7607.results
-  "Specialized data structures for holding results of searches.")
+  "Specialized data structures for holding results of searches."
+  (:refer-clojure :exclude [type])
+  (:require [com.gfredericks.lib-7607.util :refer [update]]))
 
 ;; TODO: print-these with metadata? or let that be set elsewhere?
+;;
+;; I'm starting to lean toward doing this with only maps, and explicit
+;; :type entries (rather than on the metadata). Solves the
+;; serialization problems and is less magical.
+
+(defn ^:private type
+  [coll]
+  (or (if (map? coll) (:type coll))
+      (class coll)))
 
 (defmulti add-result
   "Multimethod to add a result to a collection."
@@ -11,38 +22,47 @@
   [coll x]
   (conj coll x))
 
+(defmulti results-seq type)
+
+(defn single-result
+  "Given a result holder, checks that there is exactly one result and
+  returns it."
+  [m]
+  (let [[x :as xs] (results-seq m)]
+    (assert (= 1 (count xs)) "single-result requires exactly one result")
+    x))
+
+
 (defmethod add-result ::best-result-keeper
   [coll x]
-  (if (empty? coll)
-    (conj coll x)
-    (let [[[data score]] coll
-          [data' score'] x]
+  (if-let [[data score] (:result coll)]
+    (let [[data' score'] x]
       (if (neg? (compare score score'))
-        (assoc coll 0 x)
-        coll))))
+        (assoc coll :result x)
+        coll))
+    (assoc coll :result x)))
+
+(defmethod results-seq ::best-result-keeper [m] (if (contains? m :result) (list (:result m))))
 
 (def best-result-keeper
   "A vector that expects entries like [data score] and will only keep
    the best result. Earlier entries win tiebreaks."
-  (with-meta
-    []
-    {:type ::best-result-keeper}))
+  {:type ::best-result-keeper})
 
 
 (defmethod add-result ::grouper-by
-  [m x]
-  (let [group-key ((-> m meta :group-fn) x)
-        group (or (get m group-key)
-                  (-> m meta :empty-nested-coll))]
-    (assoc m group-key (add-result group x))))
+  [{:keys [group-fn empty] :as m} x]
+  (let [group-key (group-fn x)]
+    (update-in m [:results group-key]
+               (fnil add-result empty)
+               x)))
 
 (defn grouper-by
   [group-fn empty-nested-coll]
-  (with-meta
-    {}
-    {:type ::grouper-by
-     :group-fn group-fn
-     :empty-nested-coll empty-nested-coll}))
+  {:type ::grouper-by
+   :group-fn group-fn
+   :empty empty-nested-coll
+   :results {}})
 
 
 (deftype SampledCollection [max-size actual-size set]

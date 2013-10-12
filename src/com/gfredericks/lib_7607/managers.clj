@@ -1,11 +1,16 @@
 (ns com.gfredericks.lib-7607.managers
-  (:require [com.gfredericks.lib-7607.results :refer [add-result best-result-keeper]]
+  (:require [com.gfredericks.lib-7607.results :refer [add-result best-result-keeper single-result]]
             [com.gfredericks.lib-7607.util
              :refer [update derives type-kw-of-first-arg]])
   (:import java.util.UUID))
 
 ;;
 ;; ## Prelude
+;;
+
+;;
+;; Goal: the only things that are questionably serializable are
+;; user-supplied functions.
 ;;
 
 (defmulti -job
@@ -226,7 +231,7 @@
      (make-lazy-sm [start (scorer start)])
      (fn [nested]
        (let [[data score] (:x nested)
-             [[data' score']] (results nested)]
+             [data' score'] (-> nested results single-result)]
          (if (> score' score)
            (make-lazy-sm [data' score'])
            [data score]))))))

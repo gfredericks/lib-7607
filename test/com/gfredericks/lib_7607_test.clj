@@ -5,9 +5,8 @@
 
 ;;
 ;; TODO:
+;;   - test serialization!!!!
 ;;   - test a tree search
-;;   - test a hill-climbing search
-;;     - such as sorting!
 ;;   - test some sort of infinite thing?
 ;;
 
@@ -24,13 +23,13 @@
       (when-let [data (-> @a :crashed-threads rand-nth)]
         (pause a)
         (throw (ex-info (str "Search thread crashed! " (str (:throwable data)))
-                        {:info data})))
+                        {:info data}
+                        (:throwable data))))
       (Thread/sleep 100))
     (-> @a :search-manager results)))
 
 
-(deftest easy-search-test
-  ;; Like http://projecteuler.net/problem=4 but quicker
+(deftest easy-search-test  ;; Like http://projecteuler.net/problem=4 but quicker
   ;;
   ;; It's worth noting that the 3-digit version could be sped up by
   ;; doing the inner loop inside a job. But maybe we should wait for
@@ -84,8 +83,7 @@
            (-> sm run-search sort)))))
 
 
-;; Problem: this algorithm doesn't actually succeed
-(deftest hill-climbing-sort-test
+(deftest hill-climbing-test
   (let [f' (fn [z] (inc (- (* (dec z) (dec z)))))
         f (fn [x y] (+ (f' x) (f' y)))
         e 1/1000
