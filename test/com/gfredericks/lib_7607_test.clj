@@ -36,6 +36,7 @@
     (= r1 r2)))
 
 
+
 (cereal/defn easy-search-func
   [[x y]]
   (let [z (* x y)]
@@ -58,74 +59,142 @@
   (testing "Serialization"
     (is (round-trip-same-result? easy-search-sm))))
 
+
+
+(cereal/defn random-guess-generator [] (rand-int 100))
+(cereal/defn random-guess-checker
+  [n]
+  (if (-> n str reverse (= [\7 \4]))
+    n))
+
+(def random-guess-sm
+  (random-guess-search-manager random-guess-generator random-guess-checker))
+
 (deftest random-guess-test
-  (let [sm (random-guess-search-manager
-            #(rand-int 100)
-            #(if (-> % str reverse (= [\7 \4]))
-               %))]
-    (is (-> sm run-search (= 47)))))
+  (is (-> random-guess-sm run-search (= 47)))
+  (testing "Serialization"
+    (is (round-trip-same-result? random-guess-sm))))
+
+
+
+(cereal/defn map-reduce-map-fn
+  [n]
+  [n (->> n str (map str) (map read-string) (reduce +))])
+(cereal/defn map-reduce-reduce-fn
+  [a b]
+  (max-key first a b))
+
+(def map-reduce-sm
+  (map-quick-reducing-search-manager
+   map-reduce-map-fn
+   map-reduce-reduce-fn
+   [0 0]
+   (range 1000)))
 
 (deftest map-reduce-test
-  (let [sm (map-quick-reducing-search-manager
-            (fn [n]
-              [n (->> n str (map str) (map read-string) (reduce +))])
-            #(max-key first %1 %2)
-            [0 0]
-            (range 1000))]
-    (is (-> sm run-search first (= 999)))))
+  (is (-> map-reduce-sm run-search first (= 999)))
+  (testing "Serialization"
+    (is (round-trip-same-result? map-reduce-sm))))
+
+
+
+(cereal/defn first-result-func
+  [x]
+  (when (= "38" (str x)) x))
+
+(def first-result-sm
+  (lazy-seq-first-result-manager
+   (range 75)
+   first-result-func))
 
 (deftest first-result-manager-test
-  (let [sm (lazy-seq-first-result-manager
-            (range 75)
-            #(when (= "38" (str %)) %))]
-    (is (= 38 (-> sm run-search)))))
+  (is (= 38 (-> first-result-sm run-search)))
+  (testing "Serialization"
+    (is (round-trip-same-result? first-result-sm))))
+
+
+
+(cereal/defn iterator-div-checker
+  [n d]
+  (when (zero? (rem n d)) [(/ n d) [d]]))
+
+(cereal/defn iterator-func
+  [n primes sm]
+  (let [[n ds] (results sm)]
+    (if (= 1 n)
+      ds
+      (lazy-seq-first-result-manager
+       primes
+       #(when (zero? (rem n %)) [(/ n %) (conj ds %)])))))
+
+(def iterator-sm
+  (let [primes [2 3 5 7 11 13 17 19]
+        ;; 3 * 3 * 13
+        n 117]
+    (iterator-search-manager
+     (lazy-seq-first-result-manager
+      primes
+      (cereal/partial iterator-div-checker n))
+     (cereal/partial iterator-func n primes))))
 
 (deftest iterator-test
-  (let [primes [2 3 5 7 11 13 17 19]
-        n 117 ;; 3 * 3 * 13
-        sm (iterator-search-manager
-            (lazy-seq-first-result-manager
-             primes
-             #(when (zero? (rem n %)) [(/ n %) [%]]))
-            (fn [sm]
-              (let [[n ds] (results sm)]
-                (if (= 1 n)
-                  ds
-                  (lazy-seq-first-result-manager
-                   primes
-                   #(when (zero? (rem n %)) [(/ n %) (conj ds %)]))))))]
-    (is (= [3 3 13]
-           (-> sm run-search sort)))))
+  (is (= [3 3 13] (-> iterator-sm run-search sort)))
+  (testing "Serialization"
+    ;; doesn't seem to be an easy way to get the results canonized at the moment :/
+    (is (= (-> iterator-sm run-search sort)
+           (-> iterator-sm pr-str read-string run-search sort)))))
 
+
+
+(cereal/defn hill-climbing-neighbors
+  [[x y]]
+  (let [e 1/1000]
+    [[(+ x e) y] [(- x e) y] [x (+ y e)] [x (- y e)]]))
+
+(cereal/defn hill-climbing-scorer
+  [[x y]]
+  (letfn [(f [z] (inc (- (* (dec z) (dec z)))))]
+    (+ (f x) (f y))))
+
+(def hill-climbing-sm
+  (hill-climbing-search-manager
+   [(/ (rand-int 2000) 1000)
+    (/ (rand-int 2000) 1000)]
+   hill-climbing-neighbors
+   hill-climbing-scorer))
 
 (deftest hill-climbing-test
-  (let [f' (fn [z] (inc (- (* (dec z) (dec z)))))
-        f (fn [x y] (+ (f' x) (f' y)))
-        e 1/1000
-        sm (hill-climbing-search-manager
-            [(/ (rand-int 2000) 1000)
-             (/ (rand-int 2000) 1000)]
-            (fn [[x y]]
-              [[(+ x e) y] [(- x e) y] [x (+ y e)] [x (- y e)]])
-            (fn [[x y]] (f x y)))]
-    (is (= [1 1]
-           (-> sm
-               run-search
-               first)))))
+  (is (= [1 1]
+         (-> hill-climbing-sm
+             run-search
+             first)))
+  (testing "Serialization"
+    (is (round-trip-same-result? hill-climbing-sm))))
+
+
+
+(cereal/defn constantly-random-guess-sm
+  []
+  random-guess-sm)
+
+(def repeatedly-sm
+  (repeatedly-search-manager
+   constantly-random-guess-sm
+   []))
 
 (deftest repeatedly-test
-  (let [fsm (fn []
-              (random-guess-search-manager
-               #(rand-int 100)
-               #(if (-> % str reverse (= [\7 \4]))
-                  %)))
-        sm (repeatedly-search-manager
-            fsm
-            [])
-        s (searcher sm {})]
+  (let [s (searcher repeatedly-sm {})]
     (Thread/sleep 250)
     (pause s)
     (let [results (-> @s :search-manager results)]
       (is (vector? results))
       (is (> 50 (count results)))
-      (is (= #{47} (set results))))))
+      (is (= #{47} (set results)))))
+  (testing "Serialization"
+    (let [s (-> repeatedly-sm
+                (pr-str)
+                (read-string)
+                (searcher {}))]
+      (Thread/sleep 250)
+      (pause s)
+      (is (= #{47} (-> @s :search-manager results (set)))))))

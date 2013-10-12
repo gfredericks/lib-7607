@@ -1,7 +1,11 @@
 (ns com.gfredericks.lib-7607.serialization
   "Utilities for creatively serialized things."
-  (:refer-clojure :exclude [defn])
+  (:refer-clojure :exclude [defn identity partial])
   (:require [clojure.core :as core]))
+
+;;
+;; Lazy Seq serialization
+;;
 
 (deftype MetadSeq [m ^clojure.lang.ISeq s]
   clojure.lang.Sequential
@@ -42,8 +46,17 @@
     (.write w ")")))
 
 ;;
-;; defn serialization
+;; fn serialization
 ;;
+
+(defmethod print-method ::prints-as-tagged-literal
+  [x ^java.io.Writer w]
+  (let [{:keys [print-tag print-data]} (meta x)]
+    (doto w
+      (.write "#")
+      (.write (str print-tag))
+      (.write " ")
+      (.write (str (force print-data))))))
 
 (core/defn read-var
   "Used by the #cereal/var data reader. Expects a fully qualified symbol."
@@ -52,18 +65,15 @@
     (when-not (find-ns ns-sym) (require ns-sym)))
   @(resolve sym))
 
+(derive ::serializable-defn ::prints-as-tagged-literal)
+
 (core/defn serializablize
   [a-var]
   (let [{ns-ob :ns, name-sym :name} (meta a-var)]
     (alter-var-root a-var vary-meta assoc
                     :type ::serializable-defn
-                    :sym (symbol (name (.getName ns-ob)) (name name-sym)))))
-
-(defmethod print-method ::serializable-defn
-  [f ^java.io.Writer w]
-  (doto w
-    (.write "#cereal/var ")
-    (.write (-> f meta :sym str))))
+                    :print-tag 'cereal/var
+                    :print-data (symbol (name (.getName ns-ob)) (name name-sym)))))
 
 (defmacro defn
   "Same format as clojure.core/defn, but the defined function will
@@ -71,3 +81,28 @@
   [& defn-args]
   `(doto (core/defn ~@defn-args)
      (serializablize)))
+
+(core/defn partial
+  [f & args]
+  (vary-meta (apply core/partial f args) assoc
+             :type ::prints-as-tagged-literal
+             :print-tag 'cereal/partial
+             :print-data (cons f args)))
+
+(core/defn read-partial
+  [[f & args]]
+  (apply partial f args))
+
+(core/defn juxt
+  [& fs]
+  (vary-meta (apply core/juxt fs) assoc
+             :type ::prints-as-tagged-literal
+             :print-tag 'cereal/juxt
+             :print-data fs))
+
+(core/defn read-juxt
+  [fs]
+  (apply juxt fs))
+
+;; Make a general way to serializabalize 3rd-party vars?
+(defn identity [x] x)

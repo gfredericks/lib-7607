@@ -1,5 +1,6 @@
 (ns com.gfredericks.lib-7607.managers
   (:require [com.gfredericks.lib-7607.results :refer [add-result best-result-keeper single-result]]
+            [com.gfredericks.lib-7607.serialization :as cereal]
             [com.gfredericks.lib-7607.util
              :refer [update derives type-kw-of-first-arg]])
   (:import java.util.UUID))
@@ -218,23 +219,34 @@
 ;;
 
 
+;; this whole not having closures thing is pretty clunky
+(cereal/defn ^:private hill-climbing-search-manager-make-lazy-sm
+  [neighbors scorer [data score :as x]]
+  (assoc
+      (lazy-seq-search-manager
+       (neighbors data)
+       (cereal/juxt cereal/identity scorer)
+       best-result-keeper)
+    :x x))
+
+(cereal/defn ^:private hill-climbing-search-manager-func
+  [neighbors scorer nested]
+  (let [[data score] (:x nested)
+        [data' score'] (-> nested results single-result)]
+    (if (> score' score)
+      (hill-climbing-search-manager-make-lazy-sm
+       neighbors
+       scorer
+       [data' score'])
+      [data score])))
+
 (defn hill-climbing-search-manager
   [start neighbors scorer]
-  (letfn [(make-lazy-sm [[data score :as x]]
-            (assoc
-                (lazy-seq-search-manager
-                 (neighbors data)
-                 (juxt identity scorer)
-                 best-result-keeper)
-              :x x))]
-    (iterator-search-manager
-     (make-lazy-sm [start (scorer start)])
-     (fn [nested]
-       (let [[data score] (:x nested)
-             [data' score'] (-> nested results single-result)]
-         (if (> score' score)
-           (make-lazy-sm [data' score'])
-           [data score]))))))
+  (iterator-search-manager
+   (hill-climbing-search-manager-make-lazy-sm neighbors scorer [start (scorer start)])
+   (cereal/partial hill-climbing-search-manager-func
+                   neighbors
+                   scorer)))
 
 
 ;;
