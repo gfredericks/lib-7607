@@ -1,7 +1,8 @@
 (ns com.gfredericks.lib-7607-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [com.gfredericks.lib-7607 :refer [searcher pause]]
-            [com.gfredericks.lib-7607.managers :refer :all]))
+            [com.gfredericks.lib-7607.managers :refer :all]
+            [com.gfredericks.lib-7607.serialization :as cereal]))
 
 ;;
 ;; TODO:
@@ -28,20 +29,34 @@
       (Thread/sleep 100))
     (-> @a :search-manager results)))
 
+(defn ^:private round-trip-same-result?
+  [sm]
+  (let [r1 (-> sm run-search)
+        r2 (-> sm pr-str read-string run-search)]
+    (= r1 r2)))
 
-(deftest easy-search-test  ;; Like http://projecteuler.net/problem=4 but quicker
+
+(cereal/defn easy-search-func
+  [[x y]]
+  (let [z (* x y)]
+    (if (= (str z) (->> z str reverse (apply str)))
+      z)))
+
+(def easy-search-sm
+  ;; Like http://projecteuler.net/problem=4 but quicker
   ;;
   ;; It's worth noting that the 3-digit version could be sped up by
   ;; doing the inner loop inside a job. But maybe we should wait for
   ;; an abstraction that does this for us?
-  (let [sm (lazy-seq-search-manager
-            (for [x (range 10 100), y (range 10 100)] [x y])
-            (fn [[x y]]
-              (let [z (* x y)]
-                (if (= (str z) (->> z str reverse (apply str)))
-                  z)))
-            (sorted-set))]
-    (is (= 9009 (-> sm run-search rseq first)))))
+  (lazy-seq-search-manager
+   (for [x (range 10 100), y (range 10 100)] [x y])
+   easy-search-func
+   (sorted-set)))
+
+(deftest easy-search-test
+  (is (= 9009 (-> easy-search-sm run-search rseq first)))
+  (testing "Serialization"
+    (is (round-trip-same-result? easy-search-sm))))
 
 (deftest random-guess-test
   (let [sm (random-guess-search-manager
