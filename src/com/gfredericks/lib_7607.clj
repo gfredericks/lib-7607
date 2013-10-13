@@ -65,6 +65,15 @@
                       (* (- 1 avg-factor) (/ time-since 1000.0)))]
        (assoc m :last-job now :rolling-avg new-avg))))
 
+(defn update-performance
+  "Second arg is the milliseconds taken during the job being
+  reported."
+  [m milliseconds]
+  (-> m
+      (update-job-frequency)
+      (update :total-jobs (fnil inc 0))
+      (update :total-milliseconds (fnil + 0) milliseconds)))
+
 ;;
 ;; Start worker code
 ;;
@@ -106,11 +115,13 @@
 
 (defn do-job
   [state-atom job]
-  (let [x (run job)]
+  (let [b (System/currentTimeMillis)
+        x (run job)
+        t (- (System/currentTimeMillis) b)]
     (swap! state-atom
            (fn [state]
              (-> state
-                 (update :performance update-job-frequency)
+                 (update :performance update-performance t)
                  (update :search-manager report (id job) x)
                  (update :thread-jobs dissoc (me)))))))
 
