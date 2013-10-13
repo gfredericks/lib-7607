@@ -27,8 +27,8 @@
   ([sequence orig-form drop-num]
      (MetadSeq.
       {:type ::droppingly
-       ::orig-form orig-form
-       ::drop-num drop-num}
+       :print-tag 'cereal/drop
+       :print-data (vector drop-num orig-form)}
       (lazy-seq
        (if-let [[x & xs] (seq sequence)]
          (cons x (droppingly-printable-lazy-seq xs orig-form (inc drop-num))))))))
@@ -37,13 +37,11 @@
   [expr]
   `(droppingly-printable-lazy-seq ~expr '~expr))
 
-(defmethod print-method ::droppingly
-  [seq ^java.io.Writer w]
-  (let [{orig-form ::orig-form, drop-num ::drop-num} (meta seq)]
-    (.write w "#=(drop ")
-    (.write w (str drop-num " "))
-    (print-method orig-form w)
-    (.write w ")")))
+(derive ::droppingly ::prints-as-tagged-literal)
+
+(core/defn read-drop
+  [[n form]]
+  (droppingly-printable-lazy-seq (drop n (eval form)) form n))
 
 ;;
 ;; fn serialization
