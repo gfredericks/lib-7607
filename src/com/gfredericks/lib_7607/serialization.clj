@@ -1,6 +1,6 @@
 (ns com.gfredericks.lib-7607.serialization
   "Utilities for creatively serialized things."
-  (:refer-clojure :exclude [defn identity partial])
+  (:refer-clojure :exclude [defn identity juxt partial])
   (:require [clojure.core :as core]))
 
 ;;
