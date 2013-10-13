@@ -162,6 +162,8 @@
 
 (defn searcher
   [search-manager opts]
+  ;; TODO: handle :jobs and remove this assertion
+  {:pre [(empty? (:jobs search-manager))]}
   (let [{:keys [result-size thread-count]} (merge default-opts opts)
 
         state (atom {:thread-count thread-count
