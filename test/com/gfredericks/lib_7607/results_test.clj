@@ -30,3 +30,12 @@
       (is=-> #{:blam/blosh} (get-in [:results "blam"]))
       (add-result :foo/blosh)
       (is=-> #{:foo/bar :foo/blosh} (get-in [:results "foo"]))))
+
+(deftest sampler-test
+  (-> (sampler 5)
+      (as-> <> (reduce add-result <> (range 1000)))
+      (results-seq)
+      (is=-> 5 (count))
+      (->> (map #(< % 1000)))
+      (set)
+      (is=-> #{true})))

@@ -65,36 +65,26 @@
    :results {}})
 
 
-(deftype SampledCollection [max-size actual-size set]
-  Object
-  (hashCode [_] (.hashCode set))
-  (toString [me] (pr-str (seq me)))
+(defmethod add-result ::sampler
+  [{:keys [set max] :as m} x]
+  (let [r (rand)
+        set' (cond-> set
+                     (or (< (count set) max)
+                         (> r (ffirst set)))
+                     (conj [r x]))
+        set'' (if (> (count set') max)
+                (disj set' (first set'))
+                set')]
+    (-> m
+        (assoc :set set'')
+        (update :total (fnil inc 0)))))
 
-  clojure.lang.Seqable
-  (seq [_] (map second set))
+(defmethod results-seq ::sampler
+  [{:keys [set]}]
+  (map second set))
 
-  clojure.lang.IPersistentCollection
-  (count [_] (count set))
-  (cons [_ x]
-    (let [r (rand)
-          set' (cond-> set
-                       (or (< (count set) max-size)
-                           (> r (ffirst set)))
-                       (conj [r x]))
-          set'' (if (> (count set') max-size)
-                  (disj set' (first set'))
-                  set')]
-      (SampledCollection.
-       max-size
-       (inc actual-size)
-       set'')))
-  (empty [_]
-    (SampledCollection. max-size 0 (empty set)))
-  (equiv [me o]
-    ;; eh whatever
-    (.equiv (seq me) o)))
-
-(defn sampled-collection
-  ([max-size]
-     (SampledCollection. max-size 0 (sorted-set-by #(compare (first %1) (first %2)))))
-  ([max-size & xs] (into (sampled-collection max-size) xs)))
+(defn sampler
+  [max-size]
+  {:type ::sampler
+   :max max-size
+   :set (sorted-set-by #(compare (first %1) (first %2)))})
