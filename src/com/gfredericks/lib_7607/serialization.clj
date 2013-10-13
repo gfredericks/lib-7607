@@ -1,6 +1,6 @@
 (ns com.gfredericks.lib-7607.serialization
   "Utilities for creatively serialized things."
-  (:refer-clojure :exclude [defn partial])
+  (:refer-clojure :exclude [defn identity partial])
   (:require [clojure.core :as core]))
 
 ;;
@@ -103,3 +103,6 @@
 (core/defn read-juxt
   [fs]
   (apply juxt fs))
+
+;; Make a general way to serializabalize 3rd-party vars?
+(defn identity [x] x)
