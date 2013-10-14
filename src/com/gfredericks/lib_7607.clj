@@ -46,8 +46,7 @@
     (.write ">")))
 
 (def default-opts
-  {:thread-count 4
-   :result-size 10})
+  {:thread-count 4})
 
 (defn update-job-frequency
   ([m] (update-job-frequency m (System/currentTimeMillis)))
@@ -164,7 +163,7 @@
   [search-manager opts]
   ;; TODO: handle :jobs and remove this assertion
   {:pre [(empty? (:jobs search-manager))]}
-  (let [{:keys [result-size thread-count]} (merge default-opts opts)
+  (let [{:keys [thread-count]} (merge default-opts opts)
 
         state (atom {:thread-count thread-count
                      :threads {}
