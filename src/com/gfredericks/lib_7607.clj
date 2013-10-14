@@ -4,38 +4,6 @@
              :as man]
             [com.gfredericks.lib-7607.util :refer [update]]))
 
-;; Okay so here's my new plan.
-;;   1) Finish the prime factoring tests and get them to pass
-;;   2) Move all the search manager code to isomorphism.search.management or so
-;;   3) Refactor it to multimethods, maps with a :type key, and a decent type
-;;      hierarchy. Move as much of the non-process functionality in there as we
-;;      can.
-
-
-
-;; TODO:
-;; - count total results found?
-;; - result buckets
-;; - jobs shouldn't have to be collections of things
-;; - track how long threads have been running?
-;;   I guess that doesn't apply very well when e.g. there are
-;;   many more threads than cores.
-
-;; It's not awesome yet but it works!
-;;
-;; What are the abstractions/protocols that we want?
-;;
-;; The job/result management stuff should be definable
-;; statelessly. A protocols and some defrecords would
-;; be an interesting approach
-;;
-;; Styles of searches we want:
-;;   - Check random instances of things
-;;   - Hill climbing
-;;   - Huge search tree
-;;   - Infinite search "tree"
-
-
 (declare info)
 
 (defmethod print-method ::search-state
@@ -151,12 +119,14 @@
 
 
 (defn add-thread
+  "Starts a worker thread."
   [state]
   (let [t (Thread. (bound-fn [] (worker state)))]
     (swap! state #(update % :threads assoc t true))
     (.start t)))
 
 (defn resume
+  "Starts up as many threads as are needed to meet the :thread-count."
   [state]
   (let [{:keys [thread-count threads]} @state
         threads-needed (- thread-count (count threads))]
@@ -177,12 +147,17 @@
             (assoc :resumable-jobs resumable-jobs))))
 
 (defn searcher
-  [search-manager opts]
-  (doto (atom (initial-searcher-state search-manager opts))
-    (alter-meta! assoc :type ::search-state)
-    (resume)))
+  "The main entry point. Given a search manager and an optional options map,
+  returns an atom representing the computational process, and starts
+  some worker threads."
+  ([search-manager] (searcher search-manager {}))
+  ([search-manager opts]
+     (doto (atom (initial-searcher-state search-manager opts))
+       (alter-meta! assoc :type ::search-state)
+       (resume))))
 
 (defn info
+  "The map that gets shown in a computation's printed representation."
   [{:keys [search-manager crashed-threads total domain threads
            show-results? extra-info]
     {avg-between :rolling-avg} :performance
@@ -210,6 +185,8 @@
             (assoc :zombie-threads (count zombies)))))
 
 (defn pause
+  "Flags all worker threads to quit after completion of their current
+  job."
   [state]
   (swap! state update :threads
          (fn [m]
@@ -217,6 +194,8 @@
   :ok)
 
 (defn set-thread-count
+  "Changes the :thread-count entry on the computation and starts/stops
+  threads as appropriate."
   [state-atom n]
   (swap! state-atom assoc :thread-count n)
   (let [threads-running (-> @state-atom :threads count)]
