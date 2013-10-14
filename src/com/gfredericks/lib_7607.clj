@@ -159,20 +159,20 @@
     (dotimes [_ threads-needed]
       (add-thread state))))
 
+(defn initial-searcher-state
+  [search-manager opts]
+  (let [{:keys [thread-count]} (merge default-opts opts)]
+    {:thread-count thread-count
+     :threads {}
+     :thread-jobs {}
+     :show-results? true
+     :search-manager search-manager}))
+
 (defn searcher
   [search-manager opts]
-  ;; TODO: handle :jobs and remove this assertion
-  {:pre [(empty? (:jobs search-manager))]}
-  (let [{:keys [thread-count]} (merge default-opts opts)
-
-        state (atom {:thread-count thread-count
-                     :threads {}
-                     :thread-jobs {}
-                     :show-results? true
-                     :search-manager search-manager})]
-    (alter-meta! state assoc :type ::search-state)
-    (resume state)
-    state))
+  (doto (atom (initial-searcher-state search-manager opts))
+    (alter-meta! assoc :type ::search-state)
+    (resume)))
 
 (defn info
   [{:keys [search-manager crashed-threads total domain threads
