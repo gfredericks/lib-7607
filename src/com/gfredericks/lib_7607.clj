@@ -89,12 +89,16 @@
   {:pre [(not (current-job @state-atom))]}
   ;; this could be more optimal about pauses
   (swap! state-atom
-         (fn [{:keys [search-manager] :as m}]
-           (if-let [[job search-manager'] (job search-manager)]
+         (fn [{:keys [search-manager resumable-jobs] :as m}]
+           (if-let [[job & jobs] (seq resumable-jobs)]
              (-> m
-                 (assoc :search-manager search-manager')
-                 (assoc-in [:thread-jobs (me)] job))
-             m)))
+                 (assoc-in [:thread-jobs (me)] job)
+                 (assoc :resumable-jobs jobs))
+             (if-let [[job search-manager'] (job search-manager)]
+               (-> m
+                   (assoc :search-manager search-manager')
+                   (assoc-in [:thread-jobs (me)] job))
+               m))))
   (or (current-job @state-atom)
       (if (-> @state-atom :search-manager done?)
         nil
@@ -161,12 +165,16 @@
 
 (defn initial-searcher-state
   [search-manager opts]
-  (let [{:keys [thread-count]} (merge default-opts opts)]
-    {:thread-count thread-count
-     :threads {}
-     :thread-jobs {}
-     :show-results? true
-     :search-manager search-manager}))
+  (let [{:keys [thread-count]} (merge default-opts opts)
+        resumable-jobs (-> search-manager :jobs vals seq)]
+    (cond-> {:thread-count thread-count
+             :threads {}
+             :thread-jobs {}
+             :show-results? true
+             :search-manager search-manager}
+
+            resumable-jobs
+            (assoc :resumable-jobs resumable-jobs))))
 
 (defn searcher
   [search-manager opts]

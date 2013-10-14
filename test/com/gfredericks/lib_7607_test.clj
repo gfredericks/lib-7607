@@ -198,3 +198,18 @@
       (Thread/sleep 250)
       (pause s)
       (is (= #{47} (-> @s :search-manager results (set)))))))
+
+
+(deftest restart-test
+  (let [sm (lazy-seq-search-manager
+            (range 10000)
+            identity
+            #{})
+        s (searcher sm {:thread-count 1})]
+    (Thread/sleep 100)
+    (let [sm' (:search-manager @s)]
+      (pause s)
+      (while (pos? (count (:threads @s))) (Thread/sleep 10))
+      (is (not (done? sm')))
+      (is (= (set (range 10000))
+             (run-search sm'))))))
