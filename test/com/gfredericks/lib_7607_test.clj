@@ -213,3 +213,30 @@
       (is (not (done? sm')))
       (is (= (set (range 10000))
              (run-search sm'))))))
+
+(cereal/defn slow-identity
+  [x]
+  (Thread/sleep 5)
+  x)
+
+(def slow-search
+  (lazy-seq-search-manager
+            (range 200)
+            slow-identity
+            #{}))
+
+(deftest persistence-test
+  (let [f (java.io.File/createTempFile "lib-7607-test" "")
+        s (searcher slow-search
+                    {:thread-count 4
+                     :persistence
+                     {:interval 35
+                      :file f}})
+        results #(-> f slurp read-string :results)]
+    (Thread/sleep 300)
+    (let [nums (results)]
+      (Thread/sleep 100)
+      (is (-> (results) count (> (count nums)))))
+    (while (not (done? (:search-manager @s))) (Thread/sleep 10))
+    (Thread/sleep 10)
+    (is (= (set (range 200)) (results)))))

@@ -2,7 +2,8 @@
   "Trying to write nice generic search controllers."
   (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]
              :as man]
-            [com.gfredericks.lib-7607.util :refer [update]]))
+            [com.gfredericks.lib-7607.util :refer [update]]
+            [fipp.edn :refer [pprint]]))
 
 (declare info)
 
@@ -12,9 +13,6 @@
     (.write "#<Searcher ")
     (.write (pr-str (info @a)))
     (.write ">")))
-
-(def default-opts
-  {:thread-count 4})
 
 (defn update-job-frequency
   ([m] (update-job-frequency m (System/currentTimeMillis)))
@@ -133,18 +131,60 @@
     (dotimes [_ threads-needed]
       (add-thread state))))
 
+(defn ^:private assoc-when-v
+  "Returns (assoc m k v) when v is truthy."
+  [m k v]
+  (cond-> m v (assoc k v)))
+
+(def default-opts
+  {:thread-count 4
+   :show-results? true})
+
 (defn initial-searcher-state
   [search-manager opts]
-  (let [{:keys [thread-count]} (merge default-opts opts)
+  (let [atts (merge default-opts opts)
         resumable-jobs (-> search-manager :jobs vals seq)]
-    (cond-> {:thread-count thread-count
-             :threads {}
-             :thread-jobs {}
-             :show-results? true
-             :search-manager search-manager}
+    (-> atts
+        (assoc-when-v :resumable-jobs resumable-jobs)
+        (assoc :threads {}
+               :thread-jobs {}
+               :search-manager search-manager)
+        (assoc-in [:persistence :agent] (agent 0 :validator number?)))))
 
-            resumable-jobs
-            (assoc :resumable-jobs resumable-jobs))))
+(defn persist
+  [last-saved file sm]
+  (let [file' (java.io.File/createTempFile "lib-7607-persistence" "")]
+    (with-open [w (clojure.java.io/writer file')]
+      (binding [*out* w]
+        (pprint sm)
+        (.flush w)))
+    (.renameTo file' file))
+  (System/currentTimeMillis))
+
+(defn maybe-persist
+  [last-saved last-saved' file sm]
+  (if (= last-saved last-saved')
+    (persist last-saved file sm)
+    last-saved))
+
+(defn ^:private persistence-watcher
+  [_ state-atom old-state new-state]
+  (let [{{:keys [interval file agent]}
+         :persistence
+         sm :search-manager}
+        new-state
+        last-saved @agent]
+    (when file
+      (cond (and interval
+                 (> (- (System/currentTimeMillis) last-saved)
+                    interval))
+            (send-off agent maybe-persist last-saved file sm)
+
+            ;; If we just finished, save regardless of whether
+            ;; it's time or not.
+            (and (done? sm)
+                 (not (done? (:search-manager old-state))))
+            (send-off agent persist file sm)))))
 
 (defn searcher
   "The main entry point. Given a search manager and an optional options map,
@@ -152,8 +192,9 @@
   some worker threads."
   ([search-manager] (searcher search-manager {}))
   ([search-manager opts]
-     (doto (atom (initial-searcher-state search-manager opts))
-       (alter-meta! assoc :type ::search-state)
+     (doto (atom (initial-searcher-state search-manager opts)
+                 :meta {:type ::search-state})
+       (add-watch ::persister persistence-watcher)
        (resume))))
 
 (defn info
