@@ -2,8 +2,8 @@
   "Trying to write nice generic search controllers."
   (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]
              :as man]
-            [com.gfredericks.lib-7607.util :refer [update]]
-            [fipp.edn :refer [pprint]]))
+            [com.gfredericks.lib-7607.pprint :refer [pprint]]
+            [com.gfredericks.lib-7607.util :refer [update]]))
 
 (declare info)
 
