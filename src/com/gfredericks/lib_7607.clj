@@ -2,7 +2,7 @@
   "Trying to write nice generic search controllers."
   (:require [com.gfredericks.lib-7607.managers :refer [job done? run report id]
              :as man]
-            [com.gfredericks.lib-7607.pprint :refer [pprint]]
+            [com.gfredericks.lib-7607.persistence :as persistence]
             [com.gfredericks.lib-7607.util :refer [update]]))
 
 (declare info)
@@ -153,12 +153,7 @@
 
 (defn persist
   [last-saved file sm]
-  (let [file' (java.io.File/createTempFile "lib-7607-persistence" "")]
-    (with-open [w (clojure.java.io/writer file')]
-      (binding [*out* w]
-        (pprint sm)
-        (.flush w)))
-    (.renameTo file' file))
+  (persistence/write file sm)
   (System/currentTimeMillis))
 
 (defn maybe-persist
