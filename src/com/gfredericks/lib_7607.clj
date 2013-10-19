@@ -142,7 +142,12 @@
 
 (defn initial-searcher-state
   [search-manager opts]
-  (let [atts (merge default-opts opts)
+  (let [persistence-file (get-in opts [:persistence :file])
+        search-manager (if (and persistence-file
+                                (.exists persistence-file))
+                         (persistence/read persistence-file)
+                         search-manager)
+        atts (merge default-opts opts)
         resumable-jobs (-> search-manager :jobs vals seq)]
     (-> atts
         (assoc-when-v :resumable-jobs resumable-jobs)
@@ -184,7 +189,13 @@
 (defn searcher
   "The main entry point. Given a search manager and an optional options map,
   returns an atom representing the computational process, and starts
-  some worker threads."
+  some worker threads.
+
+  If a :persistence map is provided in the opts and the :file therein already
+  exists, it will be read and its contents used as the search-manager intsead
+  of the provided first arg.
+
+  Please you come up with a better API for this."
   ([search-manager] (searcher search-manager {}))
   ([search-manager opts]
      (doto (atom (initial-searcher-state search-manager opts)
