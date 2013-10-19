@@ -225,17 +225,19 @@
             slow-identity
             #{}))
 
+;; This test is kind of sensitive to timing...
 (deftest persistence-test
-  (let [f (java.io.File/createTempFile "lib-7607-test" "")
+  (let [f (doto (java.io.File/createTempFile "lib-7607-test" "")
+            (.delete))
         s (searcher slow-search
                     {:thread-count 4
                      :persistence
                      {:interval 35
                       :file f}})
         results #(-> f slurp read-string :results)]
-    (Thread/sleep 300)
+    (Thread/sleep 150)
     (let [nums (results)]
-      (Thread/sleep 100)
+      (Thread/sleep 400)
       (is (-> (results) count (> (count nums)))))
     (while (not (done? (:search-manager @s))) (Thread/sleep 10))
     (Thread/sleep 10)
