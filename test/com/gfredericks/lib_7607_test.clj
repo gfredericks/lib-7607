@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [com.gfredericks.lib-7607 :refer [searcher pause]]
             [com.gfredericks.lib-7607.managers :refer :all]
+            [com.gfredericks.lib-7607.results :as results]
             [com.gfredericks.lib-7607.serialization :as cereal]))
 
 ;;
@@ -12,13 +13,17 @@
 ;;
 
 (defn ^:private run-search
-  [sm]
+  "Runs the search manager and returns the results. If milliseconds is
+  given, runs for that long and then pauses. Otherwise runs until done."
+  [sm & [milliseconds]]
   (let [now #(System/currentTimeMillis)
         a (searcher sm {})
-        timeout (+ (now) 5000)]
-    (while (or (-> @a :search-manager done? not)
-               (-> @a :threads count pos?))
-      (when (> (now) timeout)
+        normal-timeout (+ (now) (or milliseconds 1000000))
+        error-timeout (+ (now) 5000)]
+    (while (and (< (now) normal-timeout)
+                (or (-> @a :search-manager done? not)
+                    (-> @a :threads count pos?)))
+      (when (> (now) error-timeout)
         (pause a)
         (throw (ex-info "Timed out during test!" {:searcher a})))
       (when-let [data (-> @a :crashed-threads rand-nth)]
@@ -27,6 +32,7 @@
                         {:info data}
                         (:throwable data))))
       (Thread/sleep 100))
+    (pause a)
     (-> @a :search-manager results)))
 
 (defn ^:private round-trip-same-result?
@@ -60,6 +66,9 @@
     (is (round-trip-same-result? easy-search-sm))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; random-guess-needle ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (cereal/defn random-guess-needle-generator [] (rand-int 100))
 (cereal/defn random-guess-needle-checker
@@ -76,6 +85,36 @@
   (is (-> random-guess-needle-sm run-search (= 47)))
   (testing "Serialization"
     (is (round-trip-same-result? random-guess-needle-sm))))
+
+
+;;;;;;;;;;;;;;;;;;
+;; random-guess ;;
+;;;;;;;;;;;;;;;;;;
+
+(cereal/defn random-guess-gen [] (rand-int 1000))
+(cereal/defn random-guess-check [x]
+  (if (zero? (rem x 3))
+    x))
+(cereal/defn random-guess-group [x] (rem x 18))
+
+(def random-guess-sm
+  (random-guess-search-manager
+   random-guess-gen
+   random-guess-check
+   (results/grouper-by random-guess-group [])))
+
+(deftest random-guess-test
+  (is (= [0 3 6 9 12 15]
+         (-> random-guess-sm
+             (run-search 200)
+             (:results)
+             (keys)
+             (sort)))))
+
+
+;;;;;;;;;;;;;;;;
+;; map-reduce ;;
+;;;;;;;;;;;;;;;;
 
 (cereal/defn map-reduce-map-fn
   [n]

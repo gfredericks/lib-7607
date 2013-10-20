@@ -285,6 +285,31 @@
                   :generator generator
                   :checker checker))
 
+;; Not making done? hookable is lame. Why do I always want to redesign
+;; everything.
+(defmethod done? ::random-guess [_] false)
+(defmethod -job ::random-guess
+  [{:keys [generator checker] :as me}]
+  (when-not (done? me)
+    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
+     me]))
+(defmethod -report ::random-guess
+  [me job-id result]
+  (cond-> me
+          result
+          (update :results add-result result)))
+(defmethod results ::random-guess [me] (:results me))
+
+(defn random-guess-search-manager
+  "A search manager like the random-guess-needle search manager, but
+  continues running after finding results. Non-nil returns from the
+  checker function are added to results."
+  [generator checker results]
+  (search-manager ::random-guess
+                  :generator generator
+                  :checker checker
+                  :results results))
+
 
 (derives ::repeatedly ::search-manager ::delegator)
 (defmethod results ::repeatedly [m] (:results m))
