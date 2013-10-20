@@ -61,21 +61,21 @@
 
 
 
-(cereal/defn random-guess-generator [] (rand-int 100))
-(cereal/defn random-guess-checker
+(cereal/defn random-guess-needle-generator [] (rand-int 100))
+(cereal/defn random-guess-needle-checker
   [n]
   (if (-> n str reverse (= [\7 \4]))
     n))
 
-(def random-guess-sm
-  (random-guess-search-manager random-guess-generator random-guess-checker))
+(def random-guess-needle-sm
+  (random-guess-needle-search-manager
+   random-guess-needle-generator
+   random-guess-needle-checker))
 
-(deftest random-guess-test
-  (is (-> random-guess-sm run-search (= 47)))
+(deftest random-guess-needle-test
+  (is (-> random-guess-needle-sm run-search (= 47)))
   (testing "Serialization"
-    (is (round-trip-same-result? random-guess-sm))))
-
-
+    (is (round-trip-same-result? random-guess-needle-sm))))
 
 (cereal/defn map-reduce-map-fn
   [n]
@@ -173,13 +173,13 @@
 
 
 
-(cereal/defn constantly-random-guess-sm
+(cereal/defn constantly-random-guess-needle-sm
   []
-  random-guess-sm)
+  random-guess-needle-sm)
 
 (def repeatedly-sm
   (repeatedly-search-manager
-   constantly-random-guess-sm
+   constantly-random-guess-needle-sm
    []))
 
 (deftest repeatedly-test

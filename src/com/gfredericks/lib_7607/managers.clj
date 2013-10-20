@@ -266,25 +266,22 @@
           (and result (not (done? m)))
           (assoc :result result)))
 
-(derives ::random-guess ::search-manager ::first-result-quitter)
+(derives ::random-guess-needle ::search-manager ::first-result-quitter)
 
-(defmethod -job ::random-guess
+(defmethod -job ::random-guess-needle
   [{:keys [generator checker] :as me}]
   (when-not (done? me)
     [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
      me]))
 
-;; TODO: better docstring?
-;;       checker is a bad name since the result is actually whatever
-;;       the checker returns.
-(defn random-guess-search-manager
+(defn random-guess-needle-search-manager
   "Creates a search manager that repeatedly generates random instances
    until it finds one that satisfies. Generator should be a function
    that generates random instances of the problem (quickly), and
    checker should be the workhorse that returns non-nil if it's found
    something. Quits as soon as if finds a single result."
   [generator checker]
-  (search-manager ::random-guess
+  (search-manager ::random-guess-needle
                   :generator generator
                   :checker checker))
 
