@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [com.gfredericks.lib-7607 :refer [searcher pause]]
             [com.gfredericks.lib-7607.managers :refer :all]
+            [com.gfredericks.lib-7607.results :as results]
             [com.gfredericks.lib-7607.serialization :as cereal]))
 
 ;;
@@ -12,13 +13,17 @@
 ;;
 
 (defn ^:private run-search
-  [sm]
+  "Runs the search manager and returns the results. If milliseconds is
+  given, runs for that long and then pauses. Otherwise runs until done."
+  [sm & [milliseconds]]
   (let [now #(System/currentTimeMillis)
         a (searcher sm {})
-        timeout (+ (now) 5000)]
-    (while (or (-> @a :search-manager done? not)
-               (-> @a :threads count pos?))
-      (when (> (now) timeout)
+        normal-timeout (+ (now) (or milliseconds 1000000))
+        error-timeout (+ (now) 5000)]
+    (while (and (< (now) normal-timeout)
+                (or (-> @a :search-manager done? not)
+                    (-> @a :threads count pos?)))
+      (when (> (now) error-timeout)
         (pause a)
         (throw (ex-info "Timed out during test!" {:searcher a})))
       (when-let [data (-> @a :crashed-threads rand-nth)]
@@ -27,6 +32,7 @@
                         {:info data}
                         (:throwable data))))
       (Thread/sleep 100))
+    (pause a)
     (-> @a :search-manager results)))
 
 (defn ^:private round-trip-same-result?
@@ -37,7 +43,7 @@
 
 
 
-(cereal/defn easy-search-func
+(defn easy-search-func
   [[x y]]
   (let [z (* x y)]
     (if (= (str z) (->> z str reverse (apply str)))
@@ -51,7 +57,7 @@
   ;; an abstraction that does this for us?
   (lazy-seq-search-manager
    (for [x (range 10 100), y (range 10 100)] [x y])
-   easy-search-func
+   #cereal/var easy-search-func
    (sorted-set)))
 
 (deftest easy-search-test
@@ -60,34 +66,67 @@
     (is (round-trip-same-result? easy-search-sm))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; random-guess-needle ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(cereal/defn random-guess-generator [] (rand-int 100))
-(cereal/defn random-guess-checker
+(defn random-guess-needle-generator [] (rand-int 100))
+(defn random-guess-needle-checker
   [n]
   (if (-> n str reverse (= [\7 \4]))
     n))
 
+(def random-guess-needle-sm
+  (random-guess-needle-search-manager
+   #cereal/var random-guess-needle-generator
+   #cereal/var random-guess-needle-checker))
+
+(deftest random-guess-needle-test
+  (is (-> random-guess-needle-sm run-search (= 47)))
+  (testing "Serialization"
+    (is (round-trip-same-result? random-guess-needle-sm))))
+
+
+;;;;;;;;;;;;;;;;;;
+;; random-guess ;;
+;;;;;;;;;;;;;;;;;;
+
+(defn random-guess-gen [] (rand-int 1000))
+(defn random-guess-check [x]
+  (if (zero? (rem x 3))
+    x))
+(defn random-guess-group [x] (rem x 18))
+
 (def random-guess-sm
-  (random-guess-search-manager random-guess-generator random-guess-checker))
+  (random-guess-search-manager
+   #cereal/var random-guess-gen
+   #cereal/var random-guess-check
+   (results/grouper-by #cereal/var random-guess-group [])))
 
 (deftest random-guess-test
-  (is (-> random-guess-sm run-search (= 47)))
-  (testing "Serialization"
-    (is (round-trip-same-result? random-guess-sm))))
+  (is (= [0 3 6 9 12 15]
+         (-> random-guess-sm
+             (run-search 200)
+             (:results)
+             (keys)
+             (sort)))))
 
 
+;;;;;;;;;;;;;;;;
+;; map-reduce ;;
+;;;;;;;;;;;;;;;;
 
-(cereal/defn map-reduce-map-fn
+(defn map-reduce-map-fn
   [n]
   [n (->> n str (map str) (map read-string) (reduce +))])
-(cereal/defn map-reduce-reduce-fn
+(defn map-reduce-reduce-fn
   [a b]
   (max-key first a b))
 
 (def map-reduce-sm
   (map-quick-reducing-search-manager
-   map-reduce-map-fn
-   map-reduce-reduce-fn
+   #cereal/var map-reduce-map-fn
+   #cereal/var map-reduce-reduce-fn
    [0 0]
    (range 1000)))
 
@@ -98,14 +137,14 @@
 
 
 
-(cereal/defn first-result-func
+(defn first-result-func
   [x]
   (when (= "38" (str x)) x))
 
 (def first-result-sm
   (lazy-seq-first-result-manager
    (range 75)
-   first-result-func))
+   #cereal/var first-result-func))
 
 (deftest first-result-manager-test
   (is (= 38 (-> first-result-sm run-search)))
@@ -114,11 +153,11 @@
 
 
 
-(cereal/defn iterator-div-checker
+(defn iterator-div-checker
   [n d]
   (when (zero? (rem n d)) [(/ n d) [d]]))
 
-(cereal/defn iterator-func
+(defn iterator-func
   [n primes sm]
   (let [[n ds] (results sm)]
     (if (= 1 n)
@@ -134,8 +173,8 @@
     (iterator-search-manager
      (lazy-seq-first-result-manager
       primes
-      (cereal/partial iterator-div-checker n))
-     (cereal/partial iterator-func n primes))))
+      (cereal/partial #cereal/var iterator-div-checker n))
+     (cereal/partial #cereal/var iterator-func n primes))))
 
 (deftest iterator-test
   (is (= [3 3 13] (-> iterator-sm run-search sort)))
@@ -146,12 +185,12 @@
 
 
 
-(cereal/defn hill-climbing-neighbors
+(defn hill-climbing-neighbors
   [[x y]]
   (let [e 1/1000]
     [[(+ x e) y] [(- x e) y] [x (+ y e)] [x (- y e)]]))
 
-(cereal/defn hill-climbing-scorer
+(defn hill-climbing-scorer
   [[x y]]
   (letfn [(f [z] (inc (- (* (dec z) (dec z)))))]
     (+ (f x) (f y))))
@@ -160,8 +199,8 @@
   (hill-climbing-search-manager
    [(/ (rand-int 2000) 1000)
     (/ (rand-int 2000) 1000)]
-   hill-climbing-neighbors
-   hill-climbing-scorer))
+   #cereal/var hill-climbing-neighbors
+   #cereal/var hill-climbing-scorer))
 
 (deftest hill-climbing-test
   (is (= [1 1]
@@ -173,13 +212,13 @@
 
 
 
-(cereal/defn constantly-random-guess-sm
+(defn constantly-random-guess-needle-sm
   []
-  random-guess-sm)
+  random-guess-needle-sm)
 
 (def repeatedly-sm
   (repeatedly-search-manager
-   constantly-random-guess-sm
+   #cereal/var constantly-random-guess-needle-sm
    []))
 
 (deftest repeatedly-test
@@ -214,15 +253,15 @@
       (is (= (set (range 10000))
              (run-search sm'))))))
 
-(cereal/defn slow-identity
+(defn slow-identity
   [x]
   (Thread/sleep 5)
   x)
 
 (def slow-search
   (lazy-seq-search-manager
-            (range 200)
-            slow-identity
+            (range 100)
+            #cereal/var slow-identity
             #{}))
 
 ;; This test is kind of sensitive to timing...
@@ -230,7 +269,7 @@
   (let [f (doto (java.io.File/createTempFile "lib-7607-test" "")
             (.delete))
         s (searcher slow-search
-                    {:thread-count 4
+                    {:thread-count 1
                      :persistence
                      {:interval 35
                       :file f}})
@@ -240,5 +279,5 @@
       (Thread/sleep 400)
       (is (-> (results) count (> (count nums)))))
     (while (not (done? (:search-manager @s))) (Thread/sleep 10))
-    (Thread/sleep 10)
-    (is (= (set (range 200)) (results)))))
+    (Thread/sleep 100)
+    (is (= (set (range 100)) (results)))))

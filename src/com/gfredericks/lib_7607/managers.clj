@@ -220,16 +220,16 @@
 
 
 ;; this whole not having closures thing is pretty clunky
-(cereal/defn ^:private hill-climbing-search-manager-make-lazy-sm
+(defn ^:private hill-climbing-search-manager-make-lazy-sm
   [neighbors scorer [data score :as x]]
   (assoc
       (lazy-seq-search-manager
        (neighbors data)
-       (cereal/juxt cereal/identity scorer)
+       (cereal/juxt #cereal/var identity scorer)
        best-result-keeper)
     :x x))
 
-(cereal/defn ^:private hill-climbing-search-manager-func
+(defn ^:private hill-climbing-search-manager-func
   [neighbors scorer nested]
   (let [[data score] (:x nested)
         [data' score'] (-> nested results single-result)]
@@ -244,7 +244,7 @@
   [start neighbors scorer]
   (iterator-search-manager
    (hill-climbing-search-manager-make-lazy-sm neighbors scorer [start (scorer start)])
-   (cereal/partial hill-climbing-search-manager-func
+   (cereal/partial #cereal/var hill-climbing-search-manager-func
                    neighbors
                    scorer)))
 
@@ -266,27 +266,49 @@
           (and result (not (done? m)))
           (assoc :result result)))
 
-(derives ::random-guess ::search-manager ::first-result-quitter)
+(derives ::random-guess-needle ::search-manager ::first-result-quitter)
 
-(defmethod -job ::random-guess
+(defmethod -job ::random-guess-needle
   [{:keys [generator checker] :as me}]
   (when-not (done? me)
     [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
      me]))
 
-;; TODO: better docstring?
-;;       checker is a bad name since the result is actually whatever
-;;       the checker returns.
-(defn random-guess-search-manager
+(defn random-guess-needle-search-manager
   "Creates a search manager that repeatedly generates random instances
    until it finds one that satisfies. Generator should be a function
    that generates random instances of the problem (quickly), and
    checker should be the workhorse that returns non-nil if it's found
    something. Quits as soon as if finds a single result."
   [generator checker]
-  (search-manager ::random-guess
+  (search-manager ::random-guess-needle
                   :generator generator
                   :checker checker))
+
+;; Not making done? hookable is lame. Why do I always want to redesign
+;; everything.
+(defmethod done? ::random-guess [_] false)
+(defmethod -job ::random-guess
+  [{:keys [generator checker] :as me}]
+  (when-not (done? me)
+    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
+     me]))
+(defmethod -report ::random-guess
+  [me job-id result]
+  (cond-> me
+          result
+          (update :results add-result result)))
+(defmethod results ::random-guess [me] (:results me))
+
+(defn random-guess-search-manager
+  "A search manager like the random-guess-needle search manager, but
+  continues running after finding results. Non-nil returns from the
+  checker function are added to results."
+  [generator checker results]
+  (search-manager ::random-guess
+                  :generator generator
+                  :checker checker
+                  :results results))
 
 
 (derives ::repeatedly ::search-manager ::delegator)
