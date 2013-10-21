@@ -79,10 +79,10 @@
      (applyTo [me# arglist#] (.applyTo ~proxy-name arglist#))
      ~@clauses))
 
-(def-ifn-type Var v [v])
+(def-ifn-type Var v [^clojure.lang.Var v])
 
 (defmethod print-dup Var
-  [x ^java.io.Writer w]
+  [^Var x ^java.io.Writer w]
   (print-ctor x (fn [_ _] (print-dup (.v x) w)) w))
 
 (defmethod print-method Var
