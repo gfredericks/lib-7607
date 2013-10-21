@@ -220,16 +220,16 @@
 
 
 ;; this whole not having closures thing is pretty clunky
-(cereal/defn ^:private hill-climbing-search-manager-make-lazy-sm
+(defn ^:private hill-climbing-search-manager-make-lazy-sm
   [neighbors scorer [data score :as x]]
   (assoc
       (lazy-seq-search-manager
        (neighbors data)
-       (cereal/juxt cereal/identity scorer)
+       (cereal/juxt #cereal/var identity scorer)
        best-result-keeper)
     :x x))
 
-(cereal/defn ^:private hill-climbing-search-manager-func
+(defn ^:private hill-climbing-search-manager-func
   [neighbors scorer nested]
   (let [[data score] (:x nested)
         [data' score'] (-> nested results single-result)]
@@ -244,7 +244,7 @@
   [start neighbors scorer]
   (iterator-search-manager
    (hill-climbing-search-manager-make-lazy-sm neighbors scorer [start (scorer start)])
-   (cereal/partial hill-climbing-search-manager-func
+   (cereal/partial #cereal/var hill-climbing-search-manager-func
                    neighbors
                    scorer)))
 

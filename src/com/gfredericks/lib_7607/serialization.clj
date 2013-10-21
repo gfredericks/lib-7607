@@ -1,6 +1,6 @@
 (ns com.gfredericks.lib-7607.serialization
   "Utilities for creatively serialized things."
-  (:refer-clojure :exclude [defn identity juxt partial])
+  (:refer-clojure :exclude [juxt partial])
   (:require [clojure.core :as core]))
 
 ;;
@@ -22,13 +22,13 @@
   (more [_] (.more s))
   (cons [me o] (clojure.lang.RT/cons o me)))
 
-(core/defn droppingly-printable-lazy-seq
+(defn droppingly-printable-lazy-seq
   ([sequence orig-form] (droppingly-printable-lazy-seq sequence orig-form 0))
   ([sequence orig-form drop-num]
      (MetadSeq.
       {:type ::droppingly
-       :print-tag 'cereal/drop
-       :print-data (vector drop-num orig-form)}
+       ::print-tag 'cereal/drop
+       ::print-data (vector drop-num orig-form)}
       (lazy-seq
        (if-let [[x & xs] (seq sequence)]
          (cons x (droppingly-printable-lazy-seq xs orig-form (inc drop-num))))))))
@@ -39,7 +39,7 @@
 
 (derive ::droppingly ::prints-as-tagged-literal)
 
-(core/defn read-drop
+(defn read-drop
   [[n form]]
   (droppingly-printable-lazy-seq (drop n (eval form)) form n))
 
@@ -49,58 +49,80 @@
 
 (defmethod print-method ::prints-as-tagged-literal
   [x ^java.io.Writer w]
-  (let [{:keys [print-tag print-data]} (meta x)]
+  (let [{print-tag ::print-tag
+         print-data ::print-data} (meta x)]
     (doto w
       (.write "#")
       (.write (str print-tag))
       (.write " ")
       (.write (str (force print-data))))))
 
-(core/defn read-var
-  "Used by the #cereal/var data reader. Expects a fully qualified symbol."
+(defn try-to-load-sym
   [sym]
-  (let [ns-sym (symbol (namespace sym))]
-    (when-not (find-ns ns-sym) (require ns-sym)))
-  @(resolve sym))
+  (if-let [ns-name (namespace sym)]
+    (let [ns-sym (symbol ns-name)]
+      (try (require ns-sym)
+           (resolve sym)
+           (catch java.io.FileNotFoundException e nil)))))
 
-(derive ::serializable-defn ::prints-as-tagged-literal)
+;; Macro for doing an IFn deftype that defines all 22 invoke clauses
+;; for you.
+(defmacro def-ifn-type
+  [name proxy-name fields & clauses]
+  `(deftype ~name ~fields
+     clojure.lang.IFn
+     ~@(for [i (range 22)
+             :let [args (repeatedly i #(gensym "args"))]]
+         (list `invoke
+               (vec (list* 'this args))
+               (list* '.invoke proxy-name args)))
+     (applyTo [me# arglist#] (.applyTo ~proxy-name arglist#))
+     ~@clauses))
 
-(core/defn serializablize
-  [a-var]
-  (let [{ns-ob :ns, name-sym :name} (meta a-var)]
-    (alter-var-root a-var vary-meta assoc
-                    :type ::serializable-defn
-                    :print-tag 'cereal/var
-                    :print-data (symbol (name (.getName ns-ob)) (name name-sym)))))
+(def-ifn-type Var v [v])
 
-(defmacro defn
-  "Same format as clojure.core/defn, but the defined function will
-  print as a #cereal/var form and will read in by dereffing the var."
-  [& defn-args]
-  `(doto (core/defn ~@defn-args)
-     (serializablize)))
+(defmethod print-dup Var
+  [x ^java.io.Writer w]
+  (print-ctor x (fn [_ _] (print-dup (.v x) w)) w))
 
-(core/defn partial
+(defmethod print-method Var
+  [^Var x ^java.io.Writer w]
+  (doto w
+    (.write "#cereal/var ")
+    (.write (subs (str (.v x)) 2))))
+
+(defn read-var
+  "Used by the #cereal/var data reader. Expects a fully qualified
+  symbol that resolves to any IObj (most likely a function). Returns
+  the value of the var with added metadata to allow it to print as a
+  #cereal/var tagged literal."
+  [sym]
+  (let [var (or (resolve sym)
+                (try-to-load-sym sym)
+                (throw (ex-info (str "Can't resolve #cereal/var " sym) {:sym sym})))
+        vmeta (meta var)
+        full-sym (symbol (-> vmeta :ns .getName str)
+                         (-> vmeta :name str))]
+    (Var. var)))
+
+(defn partial
   [f & args]
   (vary-meta (apply core/partial f args) assoc
              :type ::prints-as-tagged-literal
-             :print-tag 'cereal/partial
-             :print-data (cons f args)))
+             ::print-tag 'cereal/partial
+             ::print-data (cons f args)))
 
-(core/defn read-partial
+(defn read-partial
   [[f & args]]
   (apply partial f args))
 
-(core/defn juxt
+(defn juxt
   [& fs]
   (vary-meta (apply core/juxt fs) assoc
              :type ::prints-as-tagged-literal
-             :print-tag 'cereal/juxt
-             :print-data fs))
+             ::print-tag 'cereal/juxt
+             ::print-data fs))
 
-(core/defn read-juxt
+(defn read-juxt
   [fs]
   (apply juxt fs))
-
-;; Make a general way to serializabalize 3rd-party vars?
-(defn identity [x] x)

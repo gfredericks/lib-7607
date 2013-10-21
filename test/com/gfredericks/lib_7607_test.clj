@@ -43,7 +43,7 @@
 
 
 
-(cereal/defn easy-search-func
+(defn easy-search-func
   [[x y]]
   (let [z (* x y)]
     (if (= (str z) (->> z str reverse (apply str)))
@@ -57,7 +57,7 @@
   ;; an abstraction that does this for us?
   (lazy-seq-search-manager
    (for [x (range 10 100), y (range 10 100)] [x y])
-   easy-search-func
+   #cereal/var easy-search-func
    (sorted-set)))
 
 (deftest easy-search-test
@@ -70,16 +70,16 @@
 ;; random-guess-needle ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(cereal/defn random-guess-needle-generator [] (rand-int 100))
-(cereal/defn random-guess-needle-checker
+(defn random-guess-needle-generator [] (rand-int 100))
+(defn random-guess-needle-checker
   [n]
   (if (-> n str reverse (= [\7 \4]))
     n))
 
 (def random-guess-needle-sm
   (random-guess-needle-search-manager
-   random-guess-needle-generator
-   random-guess-needle-checker))
+   #cereal/var random-guess-needle-generator
+   #cereal/var random-guess-needle-checker))
 
 (deftest random-guess-needle-test
   (is (-> random-guess-needle-sm run-search (= 47)))
@@ -91,17 +91,17 @@
 ;; random-guess ;;
 ;;;;;;;;;;;;;;;;;;
 
-(cereal/defn random-guess-gen [] (rand-int 1000))
-(cereal/defn random-guess-check [x]
+(defn random-guess-gen [] (rand-int 1000))
+(defn random-guess-check [x]
   (if (zero? (rem x 3))
     x))
-(cereal/defn random-guess-group [x] (rem x 18))
+(defn random-guess-group [x] (rem x 18))
 
 (def random-guess-sm
   (random-guess-search-manager
-   random-guess-gen
-   random-guess-check
-   (results/grouper-by random-guess-group [])))
+   #cereal/var random-guess-gen
+   #cereal/var random-guess-check
+   (results/grouper-by #cereal/var random-guess-group [])))
 
 (deftest random-guess-test
   (is (= [0 3 6 9 12 15]
@@ -116,17 +116,17 @@
 ;; map-reduce ;;
 ;;;;;;;;;;;;;;;;
 
-(cereal/defn map-reduce-map-fn
+(defn map-reduce-map-fn
   [n]
   [n (->> n str (map str) (map read-string) (reduce +))])
-(cereal/defn map-reduce-reduce-fn
+(defn map-reduce-reduce-fn
   [a b]
   (max-key first a b))
 
 (def map-reduce-sm
   (map-quick-reducing-search-manager
-   map-reduce-map-fn
-   map-reduce-reduce-fn
+   #cereal/var map-reduce-map-fn
+   #cereal/var map-reduce-reduce-fn
    [0 0]
    (range 1000)))
 
@@ -137,14 +137,14 @@
 
 
 
-(cereal/defn first-result-func
+(defn first-result-func
   [x]
   (when (= "38" (str x)) x))
 
 (def first-result-sm
   (lazy-seq-first-result-manager
    (range 75)
-   first-result-func))
+   #cereal/var first-result-func))
 
 (deftest first-result-manager-test
   (is (= 38 (-> first-result-sm run-search)))
@@ -153,11 +153,11 @@
 
 
 
-(cereal/defn iterator-div-checker
+(defn iterator-div-checker
   [n d]
   (when (zero? (rem n d)) [(/ n d) [d]]))
 
-(cereal/defn iterator-func
+(defn iterator-func
   [n primes sm]
   (let [[n ds] (results sm)]
     (if (= 1 n)
@@ -173,8 +173,8 @@
     (iterator-search-manager
      (lazy-seq-first-result-manager
       primes
-      (cereal/partial iterator-div-checker n))
-     (cereal/partial iterator-func n primes))))
+      (cereal/partial #cereal/var iterator-div-checker n))
+     (cereal/partial #cereal/var iterator-func n primes))))
 
 (deftest iterator-test
   (is (= [3 3 13] (-> iterator-sm run-search sort)))
@@ -185,12 +185,12 @@
 
 
 
-(cereal/defn hill-climbing-neighbors
+(defn hill-climbing-neighbors
   [[x y]]
   (let [e 1/1000]
     [[(+ x e) y] [(- x e) y] [x (+ y e)] [x (- y e)]]))
 
-(cereal/defn hill-climbing-scorer
+(defn hill-climbing-scorer
   [[x y]]
   (letfn [(f [z] (inc (- (* (dec z) (dec z)))))]
     (+ (f x) (f y))))
@@ -199,8 +199,8 @@
   (hill-climbing-search-manager
    [(/ (rand-int 2000) 1000)
     (/ (rand-int 2000) 1000)]
-   hill-climbing-neighbors
-   hill-climbing-scorer))
+   #cereal/var hill-climbing-neighbors
+   #cereal/var hill-climbing-scorer))
 
 (deftest hill-climbing-test
   (is (= [1 1]
@@ -212,13 +212,13 @@
 
 
 
-(cereal/defn constantly-random-guess-needle-sm
+(defn constantly-random-guess-needle-sm
   []
   random-guess-needle-sm)
 
 (def repeatedly-sm
   (repeatedly-search-manager
-   constantly-random-guess-needle-sm
+   #cereal/var constantly-random-guess-needle-sm
    []))
 
 (deftest repeatedly-test
@@ -253,7 +253,7 @@
       (is (= (set (range 10000))
              (run-search sm'))))))
 
-(cereal/defn slow-identity
+(defn slow-identity
   [x]
   (Thread/sleep 5)
   x)
@@ -261,7 +261,7 @@
 (def slow-search
   (lazy-seq-search-manager
             (range 100)
-            slow-identity
+            #cereal/var slow-identity
             #{}))
 
 (deftest persistence-test
