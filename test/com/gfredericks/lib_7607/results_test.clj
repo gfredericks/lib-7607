@@ -39,3 +39,10 @@
       (->> (map #(< % 1000)))
       (set)
       (is=-> #{true})))
+
+(deftest batcher-test
+  (-> (batcher [])
+      (add-result [7 8 9])
+      (add-result [10 11 12])
+      (results-seq)
+      (is=-> [7 8 9 10 11 12])))

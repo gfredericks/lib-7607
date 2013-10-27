@@ -24,6 +24,10 @@
 
 (defmulti results-seq type)
 
+(defmethod results-seq clojure.lang.IPersistentCollection
+  [coll]
+  (seq coll))
+
 (defn single-result
   "Given a result holder, checks that there is exactly one result and
   returns it."
@@ -88,3 +92,17 @@
   {:type ::sampler
    :max max-size
    :set (sorted-set-by #(compare (first %1) (first %2)))})
+
+
+(defmethod add-result ::batcher
+  [coll xs]
+  (update coll :results #(reduce add-result % xs)))
+
+(defmethod results-seq ::batcher [coll] (results-seq (:results coll)))
+
+(defn batcher
+  "Given a result collector, returns a new result collector that expects
+  jobs will be sequences and adds them individually to the nested thinger."
+  [nested-coll]
+  {:type ::batcher
+   :results nested-coll})
