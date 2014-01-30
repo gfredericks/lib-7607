@@ -5,6 +5,8 @@
              :refer [update derives type-kw-of-first-arg]])
   (:import java.util.UUID))
 
+(def ^java.util.Random r (java.util.Random.))
+
 ;;
 ;; ## Prelude
 ;;
@@ -253,10 +255,10 @@
 ;; Randomness
 ;;
 
-(defrecord RandomGuessJob [id data checker]
+(defrecord RandomGuessJob [id seed func]
   IJob
   (id [_] id)
-  (run [_] (checker data)))
+  (run [_] (func seed)))
 
 (defmethod results ::first-result-quitter [m] (:result m))
 (defmethod done? ::first-result-quitter [m] (contains? m :result))
@@ -269,29 +271,27 @@
 (derives ::random-guess-needle ::search-manager ::first-result-quitter)
 
 (defmethod -job ::random-guess-needle
-  [{:keys [generator checker] :as me}]
+  [{:keys [func] :as me}]
   (when-not (done? me)
-    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
+    [(RandomGuessJob. (UUID/randomUUID) (.nextLong r) func)
      me]))
 
 (defn random-guess-needle-search-manager
   "Creates a search manager that repeatedly generates random instances
-   until it finds one that satisfies. Generator should be a function
-   that generates random instances of the problem (quickly), and
-   checker should be the workhorse that returns non-nil if it's found
-   something. Quits as soon as if finds a single result."
-  [generator checker]
+  until it finds one that satisfies. The given function should accept
+  a single Long argument (as the random seed) and should return a
+  solution if it finds it or nil otherwise."
+  [func]
   (search-manager ::random-guess-needle
-                  :generator generator
-                  :checker checker))
+                  :func func))
 
 ;; Not making done? hookable is lame. Why do I always want to redesign
 ;; everything.
 (defmethod done? ::random-guess [_] false)
 (defmethod -job ::random-guess
-  [{:keys [generator checker] :as me}]
+  [{:keys [func] :as me}]
   (when-not (done? me)
-    [(RandomGuessJob. (UUID/randomUUID) (generator) checker)
+    [(RandomGuessJob. (UUID/randomUUID) (.nextLong r) func)
      me]))
 (defmethod -report ::random-guess
   [me job-id result]
@@ -303,11 +303,10 @@
 (defn random-guess-search-manager
   "A search manager like the random-guess-needle search manager, but
   continues running after finding results. Non-nil returns from the
-  checker function are added to results."
-  [generator checker results]
+  function (which should accept a Long seed) are added to results."
+  [func results]
   (search-manager ::random-guess
-                  :generator generator
-                  :checker checker
+                  :func func
                   :results results))
 
 

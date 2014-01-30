@@ -106,3 +106,35 @@
   [nested-coll]
   {:type ::batcher
    :results nested-coll})
+
+
+(defn ^:private <'
+  "Like < but works on anything comparable (not just numbers)."
+  [a b]
+  (neg? (compare a b)))
+
+(defn hall-of-fame-sampler
+  "Keeps a sample of the best items seen so far, as well as a history
+  of the last sample of previous best scores. Assumes the results are
+  of the form [x score]."
+  [sampler-size]
+  {:type         ::hall-of-fame-sampler
+   :sampler-size sampler-size
+   :results      (sorted-map)})
+
+;; Only keeps things that are at least as good as the best seen so far
+(defmethod add-result ::hall-of-fame-sampler
+  [me [x score]]
+  (cond (or (not (contains? me :score))
+            (<' (:score me) score))
+        (-> me
+            (assoc :score score)
+            (assoc-in [:results score]
+                      (add-result (sampler (:sampler-size me))
+                                  x)))
+
+        (= (:score me) score)
+        (update-in me [:results score] add-result x)
+
+        :else
+        me))

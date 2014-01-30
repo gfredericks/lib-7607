@@ -70,16 +70,15 @@
 ;; random-guess-needle ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn random-guess-needle-generator [] (rand-int 100))
-(defn random-guess-needle-checker
-  [n]
-  (if (-> n str reverse (= [\7 \4]))
-    n))
+(defn random-guess-needle-fn
+  [seed]
+  (let [n (-> seed (java.util.Random.) (.nextLong) (mod 100))]
+    (if (-> n str reverse (= [\7 \4]))
+      n)))
 
 (def random-guess-needle-sm
   (random-guess-needle-search-manager
-   #cereal/var random-guess-needle-generator
-   #cereal/var random-guess-needle-checker))
+   #cereal/var random-guess-needle-fn))
 
 (deftest random-guess-needle-test
   (is (-> random-guess-needle-sm run-search (= 47)))
@@ -91,16 +90,16 @@
 ;; random-guess ;;
 ;;;;;;;;;;;;;;;;;;
 
-(defn random-guess-gen [] (rand-int 1000))
-(defn random-guess-check [x]
-  (if (zero? (rem x 3))
-    x))
+(defn random-guess-fn
+  [seed]
+  (let [x (-> seed (java.util.Random.) (.nextLong) (mod 1000))]
+    (if (zero? (rem x 3))
+      x)))
 (defn random-guess-group [x] (rem x 18))
 
 (def random-guess-sm
   (random-guess-search-manager
-   #cereal/var random-guess-gen
-   #cereal/var random-guess-check
+   #cereal/var random-guess-fn
    (results/grouper-by #cereal/var random-guess-group [])))
 
 (deftest random-guess-test
