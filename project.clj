@@ -1,4 +1,4 @@
-(defproject com.gfredericks/lib-7607 "0.1.0-SNAPSHOT"
+(defproject com.gfredericks/lib-7607 "0.1.0"
   :description "Casual computational combinatorics framework"
   :url "https://github.com/fredericksgary/lib-7607"
   :license {:name "Eclipse Public License"
